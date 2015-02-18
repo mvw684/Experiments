@@ -180,8 +180,8 @@ namespace Fractals {
                 double ys = y * y;
                 square = xs + ys;
                 if (
-                    x > escapeVal ||
-                    y > escapeVal ||
+                    //x > escapeVal ||
+                    //y > escapeVal ||
                     (square > escapeValSquare)
                 ) {
                     break;
