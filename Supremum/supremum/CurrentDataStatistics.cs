@@ -36,7 +36,7 @@ namespace supremum {
 
 
         internal static void ReportBest(Solution solution) {
-            var allBests = ExistingDataStatistics.allBests;
+            var allBests = ExistingDataStatistics.allSolutionsCounts;
             lock (allBests) {
                 if (1 <= solution.CountAms) {
                     if (!allBests.Contains(solution.CountAms) && solution.CountAms < 10000) {

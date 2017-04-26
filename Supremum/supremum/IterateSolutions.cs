@@ -5,7 +5,7 @@ using System.Threading;
 namespace supremum {
     internal class IterateSolutions {
 
-        static long startPoint = 16538864;
+        static long startPoint = 15631514;
         static long prepared = 0;
 
         List<Solution> freeList = new List<Solution>();
@@ -39,12 +39,16 @@ namespace supremum {
             if (currentIndex >= 256) {
                 if (prepared >= startPoint) {
                     EvaluateSolutionAsync(current);
+                } else {
+                    Interlocked.Increment(ref CurrentDataStatistics.evaluated);
                 }
                 prepared++;
             } else {
-                foreach (var value in ExistingDataStatistics.allBestValues[currentIndex]) {
+                var values = ExistingDataStatistics.allBestSolutions[currentIndex];
+                for(int index = values.Length-1; index >= 0; index--) {
+                    int value = values[index];
                     if (value <= previousValue) {
-                        continue;
+                        break;
                     }
                     current[currentIndex] = value;
                     PrepareSolutionsViaIteration(current, value, currentIndex + 1);
@@ -88,7 +92,8 @@ namespace supremum {
 
         private void ParrallelEvaluate(object oindex) {
             int index = (int)oindex;
-            int localBest = 10000;
+            const int MaxSolution = 7000;
+            int localBest = MaxSolution;
 
             while (true) {
                 Solution toHandle = null;
@@ -99,7 +104,7 @@ namespace supremum {
                     toHandle = toEvaluate[0];
                     toEvaluate.RemoveAt(0);
                 }
-                if (toHandle.UpdateCountAms(localBest)) {
+                if (toHandle.UpdateCountAms(MaxSolution)) {
                     localBest = toHandle.CountAms;
                     CurrentDataStatistics.localBest[index] = localBest;
                     CurrentDataStatistics.ReportBest(toHandle);

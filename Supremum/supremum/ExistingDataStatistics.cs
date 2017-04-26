@@ -10,7 +10,9 @@ using System.Threading.Tasks;
 namespace supremum {
     internal static class ExistingDataStatistics {
 
-        internal static HashSet<int> allBests;
+        internal static HashSet<int> allSolutionsCounts;
+        internal static int[][] allBestSolutions;
+
         internal static int[] Min;
         internal static int[] Max;
 
@@ -19,12 +21,11 @@ namespace supremum {
 
         internal static List<int[]> best;
 
-        internal static SortedSet<int>[] allBestValues;
-
+        
         internal static int[] allValues;
 
         static ExistingDataStatistics() {
-            allBests = new HashSet<int>();
+            allSolutionsCounts = new HashSet<int>();
             Min = new int[256];
             Max = new int[256];
             WidenedMin = new int[256];
@@ -36,13 +37,13 @@ namespace supremum {
             DirectoryInfo resultDir = new DirectoryInfo(Constants.OutputDir);
             var files = resultDir.GetFiles("Sup*.csv");
             List<Tuple<int, FileInfo>> fileWithNumber = new List<Tuple<int, FileInfo>>(files.Length);
-            lock (allBests) {
+            lock (allSolutionsCounts) {
                 foreach (var file in files) {
                     string fileName = file.Name;
                     string[] parts = fileName.Split('.');
                     int nrOfValues = Int32.Parse(parts[1]);
                     fileWithNumber.Add(new Tuple<int, FileInfo>(nrOfValues, file));
-                    allBests.Add(nrOfValues);
+                    allSolutionsCounts.Add(nrOfValues);
                 }
             }
             fileWithNumber.Sort((a, b) => a.Item1.CompareTo(b.Item1));
@@ -102,9 +103,10 @@ namespace supremum {
                 return;
             }
             var allValuesTemp = new SortedSet<int>();
-            allBestValues = new SortedSet<int>[256];
+            var allBestSolutionsTemp = new SortedSet<int>[256];
+            allBestSolutions = new int[256][];
             for (int i = 0; i < 256; i++) {
-                allBestValues[i] = new SortedSet<int>();
+                allBestSolutionsTemp[i] = new SortedSet<int>();
             }
 
             int[] values = Read(fileWithNumber[0].Item2);
@@ -112,7 +114,7 @@ namespace supremum {
                 int v = values[j];
                 Min[j] = v;
                 Max[j] = v;
-                allBestValues[j].Add(v);
+                allBestSolutionsTemp[j].Add(v);
                 allValuesTemp.Add(v);
             }
             int lastItem = Math.Min(Constants.BestItemsToCheck, fileWithNumber.Count);
@@ -129,7 +131,7 @@ namespace supremum {
                     if (v > Max[j]) {
                         Max[j] = v;
                     }
-                    allBestValues[j].Add(v);
+                    allBestSolutionsTemp[j].Add(v);
                     allValuesTemp.Add(v);
                 }
             }
@@ -138,6 +140,8 @@ namespace supremum {
 
             // widen
             for (int j = 0; j < 256; j++) {
+                allBestSolutions[j] = allBestSolutionsTemp[j].ToArray();
+                Array.Sort(allBestSolutions[j]);
                 WidenedMax[j] = (int)(Max[j] * 1.1);
                 WidenedMin[j] = (int)(Min[j] * 0.9);
                 if (WidenedMax[j] == 0) {

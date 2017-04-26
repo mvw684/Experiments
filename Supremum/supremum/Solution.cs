@@ -9,9 +9,12 @@ namespace supremum {
     internal class Solution {
 
         private int[] positionValues = new int[256];
-        private HashSet<int> uniqueValues = new HashSet<int>();
+        private bool[] uniqueValues = new bool[2001];
+        private int count;
+
         private HashSet<int> solutionsHelper = new HashSet<int>();
         private int countAms = 0;
+
 
         internal int CountAms {
             get {
@@ -82,28 +85,33 @@ namespace supremum {
             }
             set {
                 int oldValue = positionValues[position];
-                uniqueValues.Remove(oldValue);
+                if (oldValue != 0) {
+                    uniqueValues[oldValue] = false;
+                    count--;
+                }
                 positionValues[position] = value;
                 if (value != 0) {
-                    uniqueValues.Add(value);
+                    uniqueValues[value] = true;
+                    count++;
                 }
             }
         }
 
         internal void Clear() {
             Array.Clear(positionValues,0,256);
-            uniqueValues.Clear();
+            Array.Clear(uniqueValues,0,2001);
+            count = 0;
         }
 
         internal void CheckNrOfValues() {
-            if (uniqueValues.Count != 256) {
-                InvariantViolated("Unique values is " + uniqueValues.Count);
+            if (count != 256) {
+                InvariantViolated("Unique values is " + count);
             }
         }
 
         internal int NrOfUniqueValues {
             get {
-                return uniqueValues.Count;
+                return count;
             }
             
         }
@@ -113,7 +121,7 @@ namespace supremum {
         }
 
         public bool HasValue(int value) {
-            return uniqueValues.Contains(value);
+            return uniqueValues[value];
         }
     }
 }

@@ -90,17 +90,29 @@ namespace supremum {
             int localBest = solution.CountAms;
             CurrentDataStatistics.localBest[index] = localBest;
             int notImprovedCount = 0;
-            const int NotImprovedThreshold = 1000000;
+            const int NotImprovedThresholdRandomize = 1000000;
+            const int NotImprovedThresholdWiden = 100000;
+
             const int SearchDepth = 100;
             while (true) {
-                if (TryUpdateMultipleValues(solution, localBest, SearchDepth)) {
+                if (
+                    notImprovedCount < NotImprovedThresholdWiden && 
+                    TryUpdateMultipleValuesFromBestValues(solution, localBest, SearchDepth)
+                ) {
                     CurrentDataStatistics.ReportBest(solution);
                     localBest = solution.CountAms;
                     CurrentDataStatistics.localBest[index] = localBest;
                     notImprovedCount = 0;
-                } else {
+                }  else { 
                     notImprovedCount++;
-                    if (notImprovedCount > NotImprovedThreshold) {
+                    if (notImprovedCount > NotImprovedThresholdRandomize) {
+                        if (TryUpdateMultipleValuesFromOneToTwoThousand(solution, localBest, SearchDepth)) {
+                            CurrentDataStatistics.ReportBest(solution);
+                            localBest = solution.CountAms;
+                            CurrentDataStatistics.localBest[index] = localBest;
+                            notImprovedCount = 0;
+                        }
+                    } else if (notImprovedCount > NotImprovedThresholdRandomize) {
                         // no improvements for some time /
                         // re- randomize the content
                         for (int i = 0; i < 50; i++) {
@@ -114,7 +126,6 @@ namespace supremum {
                                     break;
                                 }
                             }
-
                         }
                         Interlocked.Increment(ref CurrentDataStatistics.evaluated);
                         solution.UpdateCountAms(Int32.MaxValue);
@@ -155,7 +166,7 @@ namespace supremum {
             return false;
         }
 
-        private bool TryUpdateMultipleValues(Solution solution, int localBest, int depth) {
+        private bool TryUpdateMultipleValuesFromOneToTwoThousand(Solution solution, int localBest, int depth) {
             if (depth == 0) {
                 return false;
             }
@@ -171,7 +182,41 @@ namespace supremum {
                 return true;
             }
         
-            if (!TryUpdateMultipleValues(solution, localBest, depth - 1)) {
+            if (!TryUpdateMultipleValuesFromOneToTwoThousand(solution, localBest, depth - 1)) {
+                solution[position] = oldValue;
+                return false;
+            } else {
+                return true;
+            }
+        }
+
+        private bool TryUpdateMultipleValuesFromBestValues(Solution solution, int localBest, int depth) {
+            if (depth == 0) {
+                return false;
+            }
+            int position = PickInteger(1, 255);
+            int oldValue = solution[position];
+
+            var bestForPosition = ExistingDataStatistics.allBestSolutions[position];
+            int max = bestForPosition.Length - 1;
+            int newValue;
+            int retries = 100;
+            do {
+                int index = PickInteger(0, max);
+                newValue = bestForPosition[index];
+                retries--;
+                if (retries == 0) {
+                    return false;
+                }
+            } while (solution.HasValue(newValue));
+
+            solution[position] = newValue;
+            Interlocked.Increment(ref CurrentDataStatistics.evaluated);
+            if (solution.UpdateCountAms(localBest)) {
+                return true;
+            }
+
+            if (!TryUpdateMultipleValuesFromBestValues(solution, localBest, depth - 1)) {
                 solution[position] = oldValue;
                 return false;
             } else {
