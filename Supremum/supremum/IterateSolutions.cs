@@ -1,18 +1,25 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Numerics;
 using System.Threading;
 
 namespace supremum {
     internal class IterateSolutions {
 
-        static long startPoint = 15631514;
+        static long startPoint = 0;
         static long prepared = 0;
 
         List<Solution> freeList = new List<Solution>();
         List<Solution> toEvaluate = new List<Solution>();
-
+        
         internal IterateSolutions() {
-            string title = "Iterating ... ";
+            
+            BigInteger count = 1;
+            for(int i = 0; i < 256; i++) {
+                count *= ExistingDataStatistics.bestValuesPerPosition[i].Length;
+            }
+
+            string title = "Iterating " + count.ToString("G") + " ... ";
             Console.Title = title;
 
             for (int i = 0; i < Constants.NrOfCoresToUse; i++) {
@@ -44,7 +51,7 @@ namespace supremum {
                 }
                 prepared++;
             } else {
-                var values = ExistingDataStatistics.allBestSolutions[currentIndex];
+                var values = ExistingDataStatistics.bestValuesPerPosition[currentIndex];
                 for(int index = values.Length-1; index >= 0; index--) {
                     int value = values[index];
                     if (value <= previousValue) {
@@ -53,20 +60,6 @@ namespace supremum {
                     current[currentIndex] = value;
                     PrepareSolutionsViaIteration(current, value, currentIndex + 1);
                 }
-                //int b = ExistingDataStatistics.Min[currentIndex];
-                //if (b <= previousValue) {
-                //    b = previousValue + 1;
-                //}
-                //int t = ExistingDataStatistics.Max[currentIndex];
-                //if (b == t) {
-                //    current[currentIndex] = b;
-                //    PrepareSolutionsViaIteration(current, b, currentIndex + 1);
-                //} else if (b < t) {
-                //    for (int value = b; value <= t; value++) {
-                //        current[currentIndex] = value;
-                //        PrepareSolutionsViaIteration(current, value, currentIndex + 1);
-                //    }
-                //}
             }
         }
 

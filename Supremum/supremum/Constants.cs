@@ -7,7 +7,9 @@ using System.Threading.Tasks;
 namespace supremum {
     internal static class Constants {
         internal const string OutputDir = @"D:\VIEWS\External\mvw\Experiments\Supremum";
-        internal static int BestItemsToCheck = 200;
+
+        
+
 #if DEBUG
         internal const int NrOfCoresToUse = 1;
 #else

@@ -47,6 +47,7 @@
     <Compile Include="ExistingDataStatistics.cs" />
     <Compile Include="ConstructSolutions.cs" />
     <Compile Include="IntHashSet.cs" />
+    <Compile Include="NumberPicker.cs" />
     <Compile Include="OptimizeBestSolution.cs" />
     <Compile Include="Primes.cs" />
     <Compile Include="Program.cs" />

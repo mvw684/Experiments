@@ -5,67 +5,159 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace supremum {
     internal static class ExistingDataStatistics {
 
-        internal static HashSet<int> allSolutionsCounts;
-        internal static int[][] allBestSolutions;
+        internal static int BestItemsToCheck = 50;
 
-        internal static int[] Min;
-        internal static int[] Max;
+        internal static HashSet<int> allSolutionsCounts = new HashSet<int>();
+        internal static List<Tuple<int, int[]>> allSolutions = new List<Tuple<int, int[]>>(5000);
 
-        internal static int[] WidenedMin;
-        internal static int[] WidenedMax;
-
-        internal static List<int[]> best;
-
+        internal static List<Tuple<int, int[]>> bestSolutions = new List<Tuple<int, int[]>>(BestItemsToCheck);
         
-        internal static int[] allValues;
+        internal static int[] bestMin = new int[256];
+        internal static int[] bestMax = new int[256];
+
+        internal static int[] bestWidenedMin = new int[256];
+        internal static int[] bestWidenedMax = new int[256];
+
+        internal static int[][] bestValuesPerPosition;
+        internal static int[][] allValuesPerPosition;
+
+
+        internal static int[] allValuesPlain;
+        internal static int[] allValuesByPriority;
+
+        internal static Dictionary<int, int> valueToPriority = new Dictionary<int, int>();
+        internal static int totalPriority;
 
         static ExistingDataStatistics() {
-            allSolutionsCounts = new HashSet<int>();
-            Min = new int[256];
-            Max = new int[256];
-            WidenedMin = new int[256];
-            WidenedMax = new int[256];
-            best = ReadBest();
+            ReadAllSolutions();
+            WriteCombinedCsv();
+            ComputeNumberStatistics();
+            ComputeMinMaxFromBest();
+            ComputePerPosition();
         }
 
-    private static List<int[]> ReadBest() {
+        private static void ComputePerPosition() {
+            var byPosition = new HashSet<int>[256];
+            var bestByPosition = new HashSet<int>[256];
+            for(int j = 0; j < 256; j++) {
+                byPosition[j] = new HashSet<int>();
+                bestByPosition[j] = new HashSet<int>();
+            }
+            for(int i = 0; i < allSolutions.Count; i++) {
+                var items = allSolutions[i].Item2;
+                bool best = i < BestItemsToCheck;
+                for (int j = 0; j < 256; j++) {
+                    var value = items[j];
+                    byPosition[j].Add(value);
+                    if (best) {
+                        bestByPosition[j].Add(value);
+                    }
+                }
+            }
+            allValuesPerPosition = new int[256][];
+            bestValuesPerPosition = new int[256][];
+            for (int j = 0; j < 256; j++) {
+                int[] temp = byPosition[j].ToArray();
+                Array.Sort(temp);
+                allValuesPerPosition[j] = temp;
+
+                temp = bestByPosition[j].ToArray();
+                Array.Sort(temp);
+                bestValuesPerPosition[j] = temp;
+            }
+        }
+
+        private static void ReadAllSolutions() {
             DirectoryInfo resultDir = new DirectoryInfo(Constants.OutputDir);
             var files = resultDir.GetFiles("Sup*.csv");
-            List<Tuple<int, FileInfo>> fileWithNumber = new List<Tuple<int, FileInfo>>(files.Length);
-            lock (allSolutionsCounts) {
-                foreach (var file in files) {
-                    string fileName = file.Name;
-                    string[] parts = fileName.Split('.');
-                    int nrOfValues = Int32.Parse(parts[1]);
-                    fileWithNumber.Add(new Tuple<int, FileInfo>(nrOfValues, file));
-                    allSolutionsCounts.Add(nrOfValues);
-                }
+            foreach (var file in files) {
+                string fileName = file.Name;
+                string[] parts = fileName.Split('.');
+                int nrOfValues = Int32.Parse(parts[1]);
+                allSolutionsCounts.Add(nrOfValues);
+                int[] solution = Read(file);
+                allSolutions.Add(new Tuple<int, int[]>(nrOfValues, solution));
             }
-            fileWithNumber.Sort((a, b) => a.Item1.CompareTo(b.Item1));
-            ComputeMinMax(fileWithNumber);
-            return InitializeBest(fileWithNumber);
+            allSolutions.Sort((a,b) => a.Item1.CompareTo(b.Item1));
+            if (allSolutions.Count > 0) {
+                Interlocked.Exchange(ref CurrentDataStatistics.bestSolution, allSolutions.First().Item1);
+            }
         }
 
-        private static List<int[]> InitializeBest(List<Tuple<int, FileInfo>> fileWithNumber) {
-            List<int[]> result = new List<int[]>();
-            if (fileWithNumber.Count > 0) {
-                Interlocked.Exchange(ref CurrentDataStatistics.bestSolution, fileWithNumber[0].Item1);
-                for (int i = 0; i < fileWithNumber.Count; i++) {
-                    if (fileWithNumber[i].Item1 > 6000) {
-                        break;
+        private static void WriteCombinedCsv() {
+            StringBuilder reportLine = new StringBuilder();
+            string fileName = Path.Combine(Constants.OutputDir, "AllSup.csv");
+            using (TextWriter writer = new StreamWriter(fileName)) {
+                reportLine.Append("Count");
+                for (int i = 1; i <= 256; i++) {
+                    reportLine.Append(", Nr" + i);
+                }
+                writer.WriteLine(reportLine);
+                for (int i = 0; i < allSolutions.Count; i++) {
+                    reportLine.Clear();
+                    var solution = allSolutions[i];
+                    reportLine.Append(solution.Item1);
+                    for (int j = 0; j < 256; j++) {
+                        reportLine.Append(',');
+                        reportLine.Append(solution.Item2[j].ToString("G", CultureInfo.InvariantCulture));
                     }
-                    result.Add(Read(fileWithNumber[i].Item2));
+                    writer.WriteLine(reportLine);
                 }
-
             }
-            return result;
         }
 
+        private static void ComputeNumberStatistics() {
+            HashSet<int> allValues = new HashSet<int>();
+            int worst = allSolutions.Last().Item1;
+
+            for (int i = 0; i < allSolutions.Count; i++) {
+                var solution = allSolutions[i];
+                int count = solution.Item1;
+                int weight = worst - count;
+                int[] numbers = solution.Item2;
+                for (int j = 0; j < 256; j++) {
+                    int number = numbers[j];
+                    allValues.Add(number);
+                    int oldWeight;
+                    valueToPriority.TryGetValue(number, out oldWeight);
+                    oldWeight += weight;
+                    valueToPriority[number] = oldWeight;
+                }
+            }
+            allValuesPlain = allValues.ToArray();
+            allValuesByPriority = (int[])allValuesPlain.Clone();
+
+            var weights = valueToPriority.Values;
+            int min = weights.Min();
+            int max = weights.Max();
+            max -= min;
+            var keys = valueToPriority.Keys.ToList();
+            for (int i = 0; i < keys.Count; i++) {
+                int key = keys[i];
+                int weight = valueToPriority[key];
+                weight -= min;
+                weight = (int)((weight * 1000.0) / max);
+                valueToPriority[key] = weight;
+            }
+
+            weights = valueToPriority.Values;
+            min = weights.Min();
+            max = weights.Max();
+
+            Array.Sort(allValuesPlain);
+            Array.Sort(
+                allValuesByPriority,
+                (a, b) => valueToPriority[a].CompareTo(valueToPriority[b])
+            );
+            totalPriority = valueToPriority.Values.Sum();
+        }
+        
+        
+        
         /// <summary>
         /// Initial value based on an appoximate curve
         /// </summary>
@@ -94,83 +186,36 @@ namespace supremum {
         }
 
 
-        private static void ComputeMinMax(List<Tuple<int, FileInfo>> fileWithNumber) {
-            if (fileWithNumber.Count == 0) {
-                for (int j = 0; j < 256; j++) {
-                    Min[j] = 1;
-                    Max[j] = 2000;
-                }
-                return;
+        private static void ComputeMinMaxFromBest() {
+            bestSolutions = allSolutions.GetRange(0, Math.Min(BestItemsToCheck, allSolutions.Count));
+            for (int j = 0; j < 256; j++) {
+                bestMin[j] = Int32.MaxValue;
+                bestMax[j] = Int32.MinValue;
             }
-            var allValuesTemp = new SortedSet<int>();
-            var allBestSolutionsTemp = new SortedSet<int>[256];
-            allBestSolutions = new int[256][];
-            for (int i = 0; i < 256; i++) {
-                allBestSolutionsTemp[i] = new SortedSet<int>();
-            }
-
-            int[] values = Read(fileWithNumber[0].Item2);
-            for (int j = 0; j < values.Length; j++) {
-                int v = values[j];
-                Min[j] = v;
-                Max[j] = v;
-                allBestSolutionsTemp[j].Add(v);
-                allValuesTemp.Add(v);
-            }
-            int lastItem = Math.Min(Constants.BestItemsToCheck, fileWithNumber.Count);
-            
-            for (int i = 1; i < lastItem; i++) { 
-                var file = fileWithNumber[i];
-                values = Read(file.Item2);
+            for (int i = 0; i < bestSolutions.Count; i++) { 
+                var solution = bestSolutions[i];
+                var values = solution.Item2;
                 for (int j = 0; j < values.Length; j++) {
                     int v = values[j];
-
-                    if (v < Min[j]) {
-                        Min[j] = v;
+                    if (v < bestMin[j]) {
+                        bestMin[j] = v;
                     }
-                    if (v > Max[j]) {
-                        Max[j] = v;
+                    if (v > bestMax[j]) {
+                        bestMax[j] = v;
                     }
-                    allBestSolutionsTemp[j].Add(v);
-                    allValuesTemp.Add(v);
                 }
             }
-
-            allValues = allValuesTemp.ToArray();
 
             // widen
+            const double factor = 0.2d;
             for (int j = 0; j < 256; j++) {
-                allBestSolutions[j] = allBestSolutionsTemp[j].ToArray();
-                Array.Sort(allBestSolutions[j]);
-                WidenedMax[j] = (int)(Max[j] * 1.1);
-                WidenedMin[j] = (int)(Min[j] * 0.9);
-                if (WidenedMax[j] == 0) {
-                    WidenedMax[j] = 1;
+                bestWidenedMax[j] = (int)(bestMax[j] * (1+factor));
+                bestWidenedMin[j] = (int)(bestMin[j] * (1-factor));
+                if (bestWidenedMax[j] == 0) {
+                    bestWidenedMax[j] = 1;
                 }
-                if (WidenedMin[j] == 0) {
-                    WidenedMin[j] = 1;
-                }
-            }
-
-
-            StringBuilder reportLine = new StringBuilder();
-            string fileName = Path.Combine(Constants.OutputDir, "AllSup.csv");
-            using (TextWriter writer = new StreamWriter(fileName)) {
-                reportLine.Append("Count");
-                for(int i = 1; i <=256; i++) {
-                    reportLine.Append(", Nr" + i);
-                }
-                writer.WriteLine(reportLine);
-                for (int i = 0; i < fileWithNumber.Count; i++) {
-                    reportLine.Clear();
-                    var file = fileWithNumber[i];
-                    values = Read(file.Item2);
-                    reportLine.Append(file.Item1);
-                    for (int j = 0; j < values.Length; j++) {
-                        reportLine.Append(',');
-                        reportLine.Append(values[j].ToString("G", CultureInfo.InvariantCulture));
-                    }
-                    writer.WriteLine(reportLine);
+                if (bestWidenedMin[j] == 0) {
+                    bestWidenedMin[j] = 1;
                 }
             }
         }
