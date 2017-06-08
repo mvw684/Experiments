@@ -6,29 +6,33 @@ using System.Threading;
 namespace supremum {
     internal class IterateSolutions {
 
-        static long startPoint = 0;
+        static long startPoint = 1184070;
         static long prepared = 0;
 
-        List<Solution> freeList = new List<Solution>();
-        List<Solution> toEvaluate = new List<Solution>();
+        Queue<Solution> freeList = new Queue<Solution>(Constants.NrOfCoresToUse * 8);
+        Queue<Solution> toEvaluate = new Queue<Solution>(Constants.NrOfCoresToUse * 4);
         
         internal IterateSolutions() {
             
             BigInteger count = 1;
-            for(int i = 0; i < 256; i++) {
+            for(int i = 0; i < Constants.SolutionSize; i++) {
                 count *= ExistingDataStatistics.bestValuesPerPosition[i].Length;
             }
 
             string title = "Iterating " + count.ToString("G") + " ... ";
             Console.Title = title;
 
+            // fill free list with amount that can be consumed
+            // let consumers dictate the pace
+            while(freeList.Count < Constants.NrOfCoresToUse * 4) {
+                freeList.Enqueue(new Solution());
+            }
             for (int i = 0; i < Constants.NrOfCoresToUse; i++) {
-                // allow producer some slack to have max overlap, so create a queue > #threads
-                freeList.Add(new Solution());
-                freeList.Add(new Solution());
-                Thread evaluator = new Thread(ParrallelEvaluate);
-                evaluator.IsBackground = true;
-                evaluator.Name = "Evaluator " + (i + 1);
+                Thread evaluator = 
+                    new Thread(ParrallelEvaluate) {
+                        IsBackground = true,
+                        Name = "Evaluator " + (i + 1)
+                    };
                 evaluator.Start(i);
             }
             Thread iterator = new Thread(Iterate);
@@ -38,12 +42,12 @@ namespace supremum {
         }
 
         private void Iterate() {
-            var current = new int[256];
+            var current = new int[Constants.SolutionSize];
             PrepareSolutionsViaIteration(current,0,0);
         }
 
         private void PrepareSolutionsViaIteration(int[] current, int previousValue, int currentIndex) {
-            if (currentIndex >= 256) {
+            if (currentIndex >= Constants.SolutionSize) {
                 if (prepared >= startPoint) {
                     EvaluateSolutionAsync(current);
                 } else {
@@ -64,21 +68,20 @@ namespace supremum {
         }
 
         private void EvaluateSolutionAsync(int[] current) {
-            Solution toHandle = null;
-            lock (freeList) {
-                while (freeList.Count == 0) {
+            Solution toHandle; 
+            lock(freeList) {
+                if (freeList.Count == 0) {
                     Monitor.Wait(freeList);
                 }
-                toHandle = freeList[0];
-                freeList.RemoveAt(0);
+                toHandle = freeList.Dequeue();
             }
             toHandle.Clear();
-            for (int i = 0; i < 256; i++) {
+            for (int i = 0; i < Constants.SolutionSize; i++) {
                 toHandle[i] = current[i];
             }
             toHandle.CheckNrOfValues();
             lock (toEvaluate) {
-                toEvaluate.Add(toHandle);
+                toEvaluate.Enqueue(toHandle);
                 Monitor.Pulse(toEvaluate);
             }
         }
@@ -87,24 +90,24 @@ namespace supremum {
             int index = (int)oindex;
             const int MaxSolution = 7000;
             int localBest = MaxSolution;
-
+            HashSetInt solutionsHelper = new HashSetInt(10000);
             while (true) {
-                Solution toHandle = null;
-                lock (toEvaluate) {
-                    while (toEvaluate.Count == 0) {
+                Solution toHandle;
+                lock(toEvaluate) {
+                    if (toEvaluate.Count == 0) {
                         Monitor.Wait(toEvaluate);
                     }
-                    toHandle = toEvaluate[0];
-                    toEvaluate.RemoveAt(0);
+                    toHandle = toEvaluate.Dequeue();
                 }
-                if (toHandle.UpdateCountAms(MaxSolution)) {
+                if (toHandle.UpdateCountAms(10000, solutionsHelper)) {
                     localBest = toHandle.CountAms;
-                    CurrentDataStatistics.localBest[index] = localBest;
                     CurrentDataStatistics.ReportBest(toHandle);
+                    CurrentDataStatistics.localBest[index] = localBest;
+
                 }
                 Interlocked.Increment(ref CurrentDataStatistics.evaluated);
-                lock(freeList) {
-                    freeList.Add(toHandle);
+                lock (freeList) {
+                    freeList.Enqueue(toHandle);
                     Monitor.Pulse(freeList);
                 }
             }

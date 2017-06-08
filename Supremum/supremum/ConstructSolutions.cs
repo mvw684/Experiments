@@ -37,7 +37,7 @@ namespace supremum {
 
         private void PrepareSolutionsUsingConstruction(Solution current) {
             int currentIndex = current.NrOfUniqueValues;
-            if (currentIndex >= 256) {
+            if (currentIndex >= Constants.SolutionSize) {
                 EvaluateSolutionAsync(current);
                 prepared++;
             } else {
@@ -46,9 +46,9 @@ namespace supremum {
                     current[0] = 1;
                     current[1] = 2;
                 } else {
-                    for (int i = 0; i < currentIndex && currentCount < 256; i++) {
+                    for (int i = 0; i < currentIndex && currentCount < Constants.SolutionSize; i++) {
                         int x = current[i];
-                        for (int j = i; j < currentIndex && currentCount < 256; j++) {
+                        for (int j = i; j < currentIndex && currentCount < Constants.SolutionSize; j++) {
                             int y = current[j];
                             int value;
                             if (x != y) {
@@ -57,16 +57,16 @@ namespace supremum {
                                 } else {
                                     value = x - y;
                                 }
-                                if (currentCount < 256 && !current.HasValue(value)) {
+                                if (currentCount < Constants.SolutionSize && !current.HasValue(value)) {
                                     current[currentCount++] = value;
                                 }
                             }
                             value = x + y;
-                            if (currentCount < 256 && !current.HasValue(value)) {
+                            if (currentCount < Constants.SolutionSize && !current.HasValue(value)) {
                                 current[currentCount++] = value;
                             }
                             value = x * y;
-                            if (currentCount < 256 && !current.HasValue(value)) {
+                            if (currentCount < Constants.SolutionSize && !current.HasValue(value)) {
                                 current[currentCount++] = value;
                             }
                         }
@@ -89,7 +89,7 @@ namespace supremum {
                 freeList.RemoveAt(0);
             }
             toHandle.Clear();
-            for (int i = 0; i < 256; i++) {
+            for (int i = 0; i < Constants.SolutionSize; i++) {
                 toHandle[i] = current[i];
             }
             toHandle.CheckNrOfValues();
@@ -102,7 +102,7 @@ namespace supremum {
         private void ParrallelEvaluate(object oindex) {
             int index = (int)oindex;
             int localBest = Int32.MaxValue;
-
+            HashSetInt solutionsHelper = new HashSetInt(10000);
             while (true) {
                 Solution toHandle = null;
                 lock (toEvaluate) {
@@ -112,7 +112,7 @@ namespace supremum {
                     toHandle = toEvaluate[0];
                     toEvaluate.RemoveAt(0);
                 }
-                if (toHandle.UpdateCountAms(10000)) {
+                if (toHandle.UpdateCountAms(Constants.NotGoodEnough, solutionsHelper)) {
                     localBest = toHandle.CountAms;
                     CurrentDataStatistics.localBest[index] = localBest;
                     CurrentDataStatistics.ReportBest(toHandle);

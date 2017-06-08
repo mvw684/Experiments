@@ -3,781 +3,386 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Runtime.Serialization;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
+using System.Security.Permissions;
+
 
 namespace supremum {
     /// <summary>
-    /// Generic Dictionary implementation were Key is an UInt32 
-    /// (or at least castable to an UInt32 when creating specialized versions).
-    /// This dictionary is NOT threadsafe.
+    /// Generic HashSet{int} implementation 
     /// </summary>
     [DebuggerDisplay("Count = {Count}")]
     [Serializable()]
-    public sealed class HashSetInt : IEnumerable, IEnumerable<int>, ICollection<int> {
-
-        /// <summary>
-        /// Nr of entries must be smaller then or equal too, <see cref="Entry" /> 
-        /// </summary>
-        private const int MaxEntries = Int32.MaxValue / 2;
-
-        /// <summary>
-        /// Dictionary Entries, 
-        /// by using struct and an integer as pointer, being an index into an array
-        /// of objects total performance will improve, data will be close 
-        /// together in memory (one array) allocation will be relative cheap 
-        /// since not each entry in/from the Buckets requires a seperately allocated object.
-        /// </summary>
-        /// <remarks>
-        /// Usign next as indication for last and in use
-        /// Assume 32 bit in an int.
-        /// bits 29-0 indicate the index of next (as int)
-        /// bit 31 indicates in use or on freelist (0 is on freelist)
-        /// bit 30 indicates last (if last enry is obviously irrelevant)
-        /// </remarks>
-        private struct Entry {
-            /// <summary>
-            /// Bit indicating last (sign bit) so &lt; 0 is last
-            /// </summary>
-            internal const Int32 LastFlag = 1 << 31;
-
-            /// <summary>
-            /// Bit indicating Entry is in use, used for enumerations etc.
-            /// </summary>
-            internal const Int32 InUseFlag = 1 << 30;
-            /// <summary>
-            /// Retrieve index part of next
-            /// </summary>
-            internal const Int32 EntryMask = ~(LastFlag | InUseFlag);
-
-            /// <summary>
-            /// Index of next entry (bits 29-0), Last if &lt; 0,
-            /// bit FreeFlag indicates whether the entry is on the free list,
-            /// bit LastFlag indicates this is last in chain.
-            /// </summary>
-            internal int next;
-
-            /// <summary>
-            /// Key/value of entry
-            /// </summary>
-            internal int key;
+    public sealed class HashSetInt : ICollection<int> {
+        private const int StackAllocThreshold = 100;
+        private const int ShrinkThreshold = 3;
+        private int[] m_buckets;
+        private Slot[] m_slots;
+        private int m_count;
+        private int m_lastIndex;
+        private int m_freeList;
+        
+        /// <summary>Gets the number of elements that are contained in a set.</summary>
+        /// <returns>The number of elements that are contained in the set.</returns>
+        public int Count {
+            get {
+                return m_count;
+            }
         }
 
-        /// <summary>
-        /// Hashtable buckets, each bucket is a ptr (index) into the entries array
-        /// </summary>
-        private int[] buckets;
-
-        /// <summary>
-        /// The actual content of the hashtable.
-        /// </summary>
-        private Entry[] entries;
-
-        /// <summary>
-        /// All items in the entries array 0 to count are either in use,
-        /// or on the freelist.
-        /// Next the used bits indicated which entries are in use. 
-        /// This allows for simple enumeration of the used entries from 0 to count.
-        /// </summary>
-        private int count;
-
-        /// <summary>
-        /// The first index of the freelist, (index into entries),
-        /// Entry.Last if empty
-        /// </summary>
-        private int freeList;
-
-        /// <summary>
-        /// Count of items in the freelist.
-        /// </summary>
-        private int freeCount;
-
-        /// <summary>
-        /// Object to synchronize upon
-        /// </summary>
-        private Object syncRoot;
-
-        /// <summary>
-        /// Constructor with specified capacity, actual capacity will be a suitable higher prime
-        /// </summary>
+        bool ICollection<int>.IsReadOnly {
+            get {
+                return false;
+            }
+        }
+        
+        /// <summary>Initializes a new instance of the <see cref="T:System.Collections.Generic.HashSet`1" /> class that is empty and uses the specified equality comparer for the set type.</summary>
         public HashSetInt(int capacity) {
+            m_lastIndex = 0;
+            m_count = 0;
+            m_freeList = -1;
             Initialize(capacity);
         }
 
-        
-        #region IDictionary<UInt32,int> Members
-
-        /// <summary>
-        /// <see cref="IDictionary{UInt32,int}.Add"/>
-        /// </summary>
-        /// <remarks>
-        /// This Dictionary implementation will not throw an exception when adding duplicate items.
-        /// When adding duplicate items the old values will be overwritten.
-        /// </remarks>
-        public void Add(int key) {
-
-            int bucket = ((int)(key & 0x7FFFFFFF)) % buckets.Length;
-
-            // start with bucket with keys hash ( obviously keep it positive)
-            int index = buckets[bucket];
-            bool last = index < 0;
-            while (!last) {
-                if (entries[index].key == key) {
-                    // already contained
-                    return;
-                }
-                int next = entries[index].next;
-                last = next < 0;
-                index = next & Entry.EntryMask;
-            }
-
-            // not found, new entry to 'create'
-            if (freeCount > 0) {
-                // allocate from freelist
-                // keeps data more local
-                index = freeList;
-                freeList = entries[index].next & Entry.EntryMask;
-                freeCount--;
-            } else {
-                // maybe we have some to spare at the end
-                if (count == entries.Length) {
-                    // well lets create some spare entries.
-                    Resize();
-                    // new size recompute bucket
-                    bucket = ((int)(key & 0x7FFFFFFF)) % buckets.Length;
-                }
-                // take the first free entrie at the end.
-                index = count;
-                count++;
-            }
-
-            // order below minimizes risk of errors on unsynchronized use,
-            // it's a quite safe order, assuming 4 byte size assignments are atomic
-
-            // chain curent in bucket to current and set in use flag
-            entries[index].next = Entry.InUseFlag | buckets[bucket];
-            // set current's values
-            entries[index].key = key;
-            // make current available in the Dictionary
-            buckets[bucket] = index;
+        void ICollection<int>.Add(int item) {
+            AddIfNotPresent(item);
         }
 
-        /// <summary>
-        /// <see cref="IDictionary{UInt32,int}.ContainsKey"/>
-        /// </summary>
-        public bool Contains(Int32 key) {
-            return FindEntry(key) >= 0;
+        /// <summary>Removes all elements from a <see cref="T:System.Collections.Generic.HashSet`1" /> object.</summary>
+        public void Clear() {
+            if (m_lastIndex > 0) {
+                Array.Clear(m_slots, 0, m_lastIndex);
+                Array.Clear(m_buckets, 0, m_buckets.Length);
+                m_lastIndex = 0;
+                m_count = 0;
+                m_freeList = -1;
+            }
         }
 
-        /// <summary>
-        /// <see cref="IDictionary{UInt32,int}.Remove"/>
-        /// </summary>
-        public bool Remove(int key) {
-            int bucket = ((int)(key & 0x7FFFFFFF)) % buckets.Length;
-            int previous = Entry.LastFlag;
-            int index = buckets[bucket];
-            bool last = index < 0;
-            while (!last) {
-                if (entries[index].key == key) {
-                    // found !!
-                    int next = entries[index].next;
-                    if (next < 0) {
-                        // last of chain
-                        if (previous < 0) {
-                            // no previous in chain
-                            buckets[bucket] = Entry.LastFlag;
-                        } else {
-                            // previous became last
-                            entries[previous].next = Entry.InUseFlag | Entry.LastFlag;
-                        }
-                    } else {
-                        // not last of chain
-                        if (previous < 0) {
-                            buckets[bucket] = next & Entry.EntryMask;
-                        } else {
-                            entries[previous].next = (next & Entry.EntryMask) | Entry.InUseFlag;
-                        }
-                    }
-
-                    // order below minimizes risk of errors on unsynchronized use,
-                    // it's a quite safe order, assuming 4 byte size assignments are atomic
-                    // see Add(UInt32 key) method
-                    // 
-                    // assure InUse bit is cleared.
-                    entries[index].next = freeList;
-                    entries[index].key = 0;
-                    freeList = index;
-                    freeCount++;
-                    return true;
+        /// <summary>Determines whether a <see cref="T:System.Collections.Generic.HashSet`1" /> object contains the specified element.</summary>
+        /// <param name="item">The element to locate in the <see cref="T:System.Collections.Generic.HashSet`1" /> object.</param>
+        /// <returns>true if the <see cref="T:System.Collections.Generic.HashSet`1" /> object contains the specified element; otherwise, false.</returns>
+        public bool Contains(int item) {
+            if (m_buckets != null) {
+                for (int index = m_buckets[item % m_buckets.Length] - 1; index >= 0; index = m_slots[index].next) {
+                    if (m_slots[index].value == item)
+                        return true;
                 }
-                previous = index;
-                index = entries[index].next;
-                last = index < 0;
-                index &= Entry.EntryMask;
             }
-
             return false;
         }
 
-        /// <summary>
-        /// <see cref="IDictionary{UInt32,int}.Values"/>
-        /// </summary>
-        public ICollection<int> Values {
-            get {
-                return new ValueCollection(this);
-            }
+        /// <summary>Copies the elements of a <see cref="T:System.Collections.Generic.HashSet`1" /> object to an array, starting at the specified array index.</summary>
+        /// <param name="array">The one-dimensional array that is the destination of the elements copied from the <see cref="T:System.Collections.Generic.HashSet`1" /> object. The array must have zero-based indexing.</param>
+        /// <param name="arrayIndex">The zero-based index in <paramref name="array" /> at which copying begins.</param>
+        /// <exception cref="T:System.ArgumentNullException">
+        /// <paramref name="array" /> is null.</exception>
+        /// <exception cref="T:System.ArgumentOutOfRangeException">
+        /// <paramref name="arrayIndex" /> is less than 0.</exception>
+        /// <exception cref="T:System.ArgumentException">
+        /// <paramref name="arrayIndex" /> is greater than the length of the destination <paramref name="array" />.</exception>
+        public void CopyTo(int[] array, int arrayIndex) {
+            CopyTo(array, arrayIndex, m_count);
         }
 
-        #endregion
-
-        #region ICollection<KeyValuePair<UInt32,int>> Members
-
-        
-        /// <summary>
-        /// <see cref="ICollection{Object}.Clear"/>,
-        /// <see cref="ICollection{Object}"/> containing <see cref="KeyValuePair{Uint32,int}"/>
-        /// </summary>
-        public void Clear() {
-            if (count > 0) {
-                for (int i = 0; i < buckets.Length; i++) {
-                    // TODO: consider memset or ipp
-                    buckets[i] = Entry.LastFlag;
-                }
-                Array.Clear(entries, 0, count);
-                freeList = Entry.LastFlag;
-                count = 0;
-                freeCount = 0;
-            }
-        }
-
-        
-        /// <summary>
-        /// Copies keys to provided list
-        /// </summary>
-        /// <returns>Number of actually copied items</returns>
-        public int CopyTo(List<int> array, int index) {
-            int count = this.count;
-            Entry[] entries = this.entries;
-            if (array.Capacity < index + Count) {
-                array.Capacity = index + Count;
-            }
-            for (int i = 0; i < count; i++) {
-                if ((entries[i].next & Entry.InUseFlag) != 0) {
-                    array[index++] = entries[i].key;
-                }
-            }
-            return Count;
-        }
-
-        /// <summary>
-        /// Copies keys to provided array
-        /// </summary>
-        /// <returns>Number of actually copied items</returns>
-        public void CopyTo(int[] array, int index) {
-            if (Count + index > array.Length) {
-                throw new ArgumentException("array to small");
-            }
-            int count = this.count;
-            Entry[] entries = this.entries;
-            for (int i = 0; i < count; i++) {
-                if ((entries[i].next & Entry.InUseFlag) != 0) {
-                    array[index++] = entries[i].key;
-                }
-            }
-        }
-
-        /// <summary>
-        /// Copies keys to provided array
-        /// </summary>
-        /// <returns>actual number of copied keys</returns>
-        public void CopyTo(object[] array, int index) {
-            if (Count + index > array.Length) {
-                throw new ArgumentException("array to small");
-            }
-            int count = this.count;
-            Entry[] entries = this.entries;
-            for (int i = 0; i < count; i++) {
-                if ((entries[i].next & Entry.InUseFlag) != 0) {
-                    array[index++] = entries[i].key;
-                }
-            }
-        }
-
-        /// <summary>
-        /// <see cref="ICollection{Object}.Count"/>,
-        /// <see cref="ICollection{Object}"/> containing <see cref="KeyValuePair{Uint32,int}"/>
-        /// </summary>
-        public int Count {
-            get {
-                return count - freeCount;
-            }
-        }
-
-        /// <summary>
-        /// <see cref="ICollection{Object}.IsReadOnly"/>,
-        /// <see cref="ICollection{Object}"/> containing <see cref="KeyValuePair{Uint32,int}"/>
-        /// </summary>
-        public bool IsReadOnly {
-            get {
-                return false;
-            }
-        }
-
-        #endregion
-
-        #region IEnumerable<KeyValuePair<UInt32,int>> Members
-
-        /// <summary>
-        /// <see cref="IEnumerable{Object}.GetEnumerator"/>,
-        /// <see cref="IEnumerable{Object}"/> enumerating over <see cref="KeyValuePair{Uint32,int}"/>
-        /// </summary>
-        public IEnumerator<int> GetEnumerator() {
-            // Enumerated Generic Dictionary KeyValuePair
-            return new Enumerator(this);
-        }
-
-        #endregion
-
-        #region IEnumerable Members
-
-        /// <summary>
-        /// <see cref="IEnumerable.GetEnumerator"/>,
-        /// </summary>
-        IEnumerator IEnumerable.GetEnumerator() {
-            // Enumerated Generic Dictionary as Collection of KeyValuePair
-            return new Enumerator(this);
-        }
-
-        #endregion
-
-        /// <summary>
-        /// <see cref="ICollection.CopyTo"/>
-        /// array should be of type <see cref="KeyValuePair{UInt32, int}"/>,
-        /// <see cref="DictionaryEntry"/> or  <see cref="Object"/>.
-        /// </summary>
-        public void CopyTo(Array array, int index) {
-            if (Count + index > array.Length) {
-                throw new ArgumentException("array to small");
-            }
-
-            int[] pairs = array as int[];
-            if (pairs != null) {
-                CopyTo(pairs, index);
-            } else {
-                object[] objects = array as object[];
-                if (objects == null) {
-                    throw new ArgumentException(
-                        "Unexpected Array content type:" +
-                        array.GetType().GetElementType().Name
-                    );
-                }
-
-                try {
-                    int count = this.count;
-                    Entry[] entries = this.entries;
-                    for (int i = 0; i < count; i++) {
-                        if ((entries[i].next & Entry.InUseFlag) != 0) {
-                            objects[index++] = entries[i].key;
-                        }
+        /// <summary>Removes the specified element from a <see cref="T:System.Collections.Generic.HashSet`1" /> object.</summary>
+        /// <param name="item">The element to remove.</param>
+        /// <returns>true if the element is successfully found and removed; otherwise, false.  method returns false if <paramref name="item" /> is not found in the <see cref="T:System.Collections.Generic.HashSet`1" /> object.</returns>
+        public bool Remove(int item) {
+            if (m_buckets != null) {
+                int index1 = item % m_buckets.Length;
+                int index2 = -1;
+                for (int index3 = m_buckets[index1] - 1; index3 >= 0; index3 = m_slots[index3].next) {
+                    if (m_slots[index3].value == item) {
+                        if (index2 < 0)
+                            m_buckets[index1] = m_slots[index3].next + 1;
+                        else
+                            m_slots[index2].next = m_slots[index3].next;
+                        m_slots[index3].value = -1;
+                        m_slots[index3].next = m_freeList;
+                        m_count = m_count - 1;
+                        if (m_count == 0) {
+                            m_lastIndex = 0;
+                            m_freeList = -1;
+                        } else
+                            m_freeList = index3;
+                        return true;
                     }
-                } catch (ArrayTypeMismatchException e) {
-                    throw new ArgumentException("InvalidArrayType", e);
+                    index2 = index3;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>Returns an enumerator that iterates through a <see cref="T:System.Collections.Generic.HashSet`1" /> object.</summary>
+        /// <returns>A <see cref="T:System.Collections.Generic.HashSet`1.Enumerator" /> object for the <see cref="T:System.Collections.Generic.HashSet`1" /> object.</returns>
+        public Enumerator GetEnumerator() {
+            return new Enumerator(this);
+        }
+
+        IEnumerator<int> IEnumerable<int>.GetEnumerator() {
+            return new Enumerator(this);
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() {
+            return new Enumerator(this);
+        }
+
+        /// <summary>Adds the specified element to a set.</summary>
+        /// <param name="item">The element to add to the set.</param>
+        /// <returns>true if the element is added to the <see cref="T:System.Collections.Generic.HashSet`1" /> object; false if the element is already present.</returns>
+        public bool Add(int item) {
+            return AddIfNotPresent(item);
+        }
+
+        /// <summary>Modifies the current <see cref="T:System.Collections.Generic.HashSet`1" /> object to contain all elements that are present in itself, the specified collection, or both.</summary>
+        /// <param name="other">The collection to compare to the current <see cref="T:System.Collections.Generic.HashSet`1" /> object.</param>
+        /// <exception cref="T:System.ArgumentNullException">
+        /// <paramref name="other" /> is null.</exception>
+        public void UnionWith(IEnumerable<int> other) {
+            if (other == null)
+                throw new ArgumentNullException("other");
+            foreach (int obj in other)
+                AddIfNotPresent(obj);
+        }
+
+        /// <summary>Removes all elements in the specified collection from the current <see cref="T:System.Collections.Generic.HashSet`1" /> object.</summary>
+        /// <param name="other">The collection of items to remove from the <see cref="T:System.Collections.Generic.HashSet`1" /> object.</param>
+        /// <exception cref="T:System.ArgumentNullException">
+        /// <paramref name="other" /> is null.</exception>
+        public void ExceptWith(IEnumerable<int> other) {
+            if (other == null)
+                throw new ArgumentNullException("other");
+            if (m_count == 0)
+                return;
+            if (other == this) {
+                Clear();
+            } else {
+                foreach (int obj in other)
+                    Remove(obj);
+            }
+        }
+
+        /// <summary>Copies the elements of a <see cref="T:System.Collections.Generic.HashSet`1" /> object to an array.</summary>
+        /// <param name="array">The one-dimensional array that is the destination of the elements copied from the <see cref="T:System.Collections.Generic.HashSet`1" /> object. The array must have zero-based indexing.</param>
+        /// <exception cref="T:System.ArgumentNullException">
+        /// <paramref name="array" /> is null.</exception>
+        public void CopyTo(int[] array) {
+            CopyTo(array, 0, m_count);
+        }
+
+        /// <summary>Copies the specified number of elements of a <see cref="T:System.Collections.Generic.HashSet`1" /> object to an array, starting at the specified array index.</summary>
+        /// <param name="array">The one-dimensional array that is the destination of the elements copied from the <see cref="T:System.Collections.Generic.HashSet`1" /> object. The array must have zero-based indexing.</param>
+        /// <param name="arrayIndex">The zero-based index in <paramref name="array" /> at which copying begins.</param>
+        /// <param name="count">The number of elements to copy to <paramref name="array" />.</param>
+        /// <exception cref="T:System.ArgumentNullException">
+        /// <paramref name="array" /> is null.</exception>
+        /// <exception cref="T:System.ArgumentOutOfRangeException">
+        /// <paramref name="arrayIndex" /> is less than 0.-or-<paramref name="count" /> is less than 0.</exception>
+        /// <exception cref="T:System.ArgumentException">
+        /// <paramref name="arrayIndex" /> is greater than the length of the destination <paramref name="array" />.-or-<paramref name="count" /> is greater than the available space from the <paramref name="index" /> to the end of the destination <paramref name="array" />.</exception>
+        public void CopyTo(int[] array, int arrayIndex, int count) {
+            if (array == null)
+                throw new ArgumentNullException("array");
+            if (arrayIndex < 0)
+                throw new ArgumentOutOfRangeException("arrayIndex");
+            if (count < 0)
+                throw new ArgumentOutOfRangeException("count");
+            if (arrayIndex > array.Length || count > array.Length - arrayIndex)
+                throw new ArgumentException("array too small");
+            int num = 0;
+            for (int index = 0; index < m_lastIndex && num < count; ++index) {
+                if (m_slots[index].value >= 0) {
+                    array[arrayIndex + num] = m_slots[index].value;
+                    ++num;
                 }
             }
         }
 
-        /// <summary>
-        /// <see cref="ICollection.IsSynchronized"/>
-        /// </summary>
-        public bool IsSynchronized {
-            get {
+        /// <summary>Removes all elements that match the conditions defined by the specified predicate from a <see cref="T:System.Collections.Generic.HashSet`1" /> collection.</summary>
+        /// <param name="match">The <see cref="T:System.Predicate`1" /> delegate that defines the conditions of the elements to remove.</param>
+        /// <returns>The number of elements that were removed from the <see cref="T:System.Collections.Generic.HashSet`1" /> collection.</returns>
+        /// <exception cref="T:System.ArgumentNullException">
+        /// <paramref name="match" /> is null.</exception>
+        public int RemoveWhere(Predicate<int> match) {
+            if (match == null)
+                throw new ArgumentNullException("match");
+            int num = 0;
+            for (int index = 0; index < m_lastIndex; ++index) {
+                if (m_slots[index].value >= 0) {
+                    int obj = m_slots[index].value;
+                    if (match(obj) && Remove(obj))
+                        ++num;
+                }
+            }
+            return num;
+        }
+
+        /// <summary>Sets the capacity of a <see cref="T:System.Collections.Generic.HashSet`1" /> object to the actual number of elements it contains, rounded up to a nearby, implementation-specific value.</summary>
+        public void TrimExcess() {
+            if (m_count == 0) {
+                m_buckets = null;
+                m_slots = null;
+            } else {
+                int prime = Primes.GetNextBucketsSize(m_count);
+                Slot[] slotArray = new Slot[prime];
+                int[] numArray = new int[prime];
+                int index1 = 0;
+                for (int index2 = 0; index2 < m_lastIndex; ++index2) {
+                    if (m_slots[index2].value >= 0) {
+                        slotArray[index1] = m_slots[index2];
+                        int index3 = slotArray[index1].value % prime;
+                        slotArray[index1].next = numArray[index3] - 1;
+                        numArray[index3] = index1 + 1;
+                        ++index1;
+                    }
+                }
+                m_lastIndex = index1;
+                m_slots = slotArray;
+                m_buckets = numArray;
+                m_freeList = -1;
+            }
+        }
+
+        internal void Initialize(int capacity) {
+            int prime = Primes.GetNextBucketsSize(capacity);
+            m_buckets = new int[prime];
+            m_slots = new Slot[prime];
+        }
+
+        private void IncreaseCapacity() {
+            int newSize = Primes.GetNextBucketsSize(2 * m_count);
+            if (newSize <= m_count)
+                throw new ArgumentException("Next prime to small");
+            SetCapacity(newSize);
+        }
+
+        private void SetCapacity(int newSize) {
+            Slot[] slotArray = new Slot[newSize];
+            if (m_slots != null)
+                Array.Copy(m_slots, 0, slotArray, 0, m_lastIndex);
+            int[] numArray = new int[newSize];
+            for (int index1 = 0; index1 < m_lastIndex; ++index1) {
+                int index2 = slotArray[index1].value % newSize;
+                slotArray[index1].next = numArray[index2] - 1;
+                numArray[index2] = index1 + 1;
+            }
+            m_slots = slotArray;
+            m_buckets = numArray;
+        }
+
+        private bool AddIfNotPresent(int value) {
+            if (value < 0) {
+                throw new ArgumentException("Negative values not allowed");
+            }
+            if (m_buckets == null)
+                Initialize(0);
+            int index1 = value % m_buckets.Length;
+            int num = 0;
+            for (int index2 = m_buckets[value % m_buckets.Length] - 1; index2 >= 0; index2 = m_slots[index2].next) {
+                if (m_slots[index2].value == value)
+                    return false;
+                ++num;
+            }
+            int index3;
+            if (m_freeList >= 0) {
+                index3 = m_freeList;
+                m_freeList = m_slots[index3].next;
+            } else {
+                if (m_lastIndex == m_slots.Length) {
+                    IncreaseCapacity();
+                    index1 = value % m_buckets.Length;
+                }
+                index3 = m_lastIndex;
+                m_lastIndex = m_lastIndex + 1;
+            }
+            m_slots[index3].value = value;
+            m_slots[index3].next = m_buckets[index1] - 1;
+            m_buckets[index1] = index3 + 1;
+            m_count = m_count + 1;
+            return true;
+        }
+
+        
+        
+        internal int[] ToArray() {
+            int[] array = new int[Count];
+            CopyTo(array);
+            return array;
+        }
+
+        internal static bool HashSetEquals(HashSetInt set1, HashSetInt set2) {
+            if (set1 == null)
+                return set2 == null;
+            if (set2 == null)
                 return false;
+            if (set1.Count != set2.Count)
+                return false;
+            foreach (int obj in set2) {
+                if (!set1.Contains(obj))
+                    return false;
             }
+            return true;
+        }
+        
+        internal struct Slot {
+            internal int value;
+            internal int next;
         }
 
-        /// <summary>
-        /// <see cref="ICollection.SyncRoot"/>
-        /// </summary>
-        public object SyncRoot {
-            get {
-                if (syncRoot == null) {
-                    Interlocked.CompareExchange(ref syncRoot, new Object(), null);
-                }
-                return syncRoot;
-            }
-        }
-
-        #region Helper methods
-
-        private void Initialize(int capacity) {
-            int size = Primes.GetNextBucketsSize(capacity);
-            buckets = new int[size];
-            for (int i = 0; i < buckets.Length; i++) {
-                buckets[i] = Entry.LastFlag;
-            }
-            entries = new Entry[size];
-            freeList = Entry.LastFlag;
-            count = 0;
-            freeCount = 0;
-        }
-
-        /// <summary>
-        /// Resizes buckets, entries and used to a suitable larger size
-        /// </summary>
-        /// <remarks>
-        /// When resizing freelist is empty so all items (0..count-1) are in use.
-        /// </remarks>
-        private void Resize() {
-            int newSize = Primes.GetNextBucketsSize(2 * count);
-            if ((newSize < 0) || (newSize > MaxEntries)) {
-                throw new ArgumentOutOfRangeException(
-                    "cannot increase size beyond " + MaxEntries
-                );
-            }
-            int[] newBuckets = new int[newSize];
-            for (int i = 0; i < newSize; i++) {
-                newBuckets[i] = Entry.LastFlag;
-            }
-            Entry[] newEntries = new Entry[newSize];
-            Array.Copy(entries, 0, newEntries, 0, count);
-
-            // redistribute the entries over the new buckets.
-            // note that the used bits do not need updating, 
-            // all from 0 to count are in use, otherwise we would not be resizing.
-            for (int index = 0; index < count; index++) {
-                int bucket = ((int)(newEntries[index].key & 0x7FFFFFFF)) % newSize;
-                newEntries[index].next = newBuckets[bucket] | Entry.InUseFlag;
-                newBuckets[bucket] = index;
-            }
-            buckets = newBuckets;
-            entries = newEntries;
-        }
-
-        /// <summary>
-        /// Find index of entry with certain key.
-        /// </summary>
-        private int FindEntry(int key) {
-            int index = buckets[(key & 0x7FFFFFFF) % buckets.Length];
-            // bool last = index == Entry.LastFlag;
-
-            // shadow instance variable to register
-            Entry[] entries = this.entries;
-
-            bool last = index < 0;
-            while (!last) {
-                if (entries[index].key == key) {
-                    return index;
-                }
-                int next = entries[index].next;
-                // last = (next & Entry.LastFlag) != 0;
-                last = next < 0;
-                index = next & Entry.EntryMask;
-            }
-            return Entry.LastFlag;
-        }
-
-        #endregion
-
-        #region Helper classes
-
-        private struct Enumerator : IEnumerator<int> {
-            
-            private HashSetInt dictionary;
-
-            /// <summary>
-            /// Initial value is 0, at end of enumerationset to -1
-            /// </summary>
+        /// <summary>Enumerates the elements of a <see cref="T:System.Collections.Generic.HashSet`1" /> object.</summary>
+        [Serializable]
+        [HostProtection(SecurityAction.LinkDemand, MayLeakOnAbort = true)]
+        public struct Enumerator : IEnumerator<int>, IDisposable, IEnumerator {
+            private HashSetInt set;
             private int index;
             private int current;
-            
-            internal Enumerator(HashSetInt dictionary) {
-                this.dictionary = dictionary;
-                index = 0;
-                current = default(int);
-            }
 
-            #region IEnumerator<KeyValuePair<UInt32,int>> Members
-
-            /// <summary>
-            /// <see cref="IEnumerator{Object}.Current"/>
-            /// </summary>
+            /// <summary>Gets the element at the current position of the enumerator.</summary>
+            /// <returns>The element in the <see cref="T:System.Collections.Generic.HashSet`1" /> collection at the current position of the enumerator.</returns>
             public int Current {
                 get {
                     return current;
                 }
             }
 
-            #endregion
-
-            #region IDisposable Members
-
-            /// <summary>
-            /// <see cref="IDisposable.Dispose"/>
-            /// </summary>
-            public void Dispose() {
-                dictionary = null;
-                index = -1;
-                current = default(int);
-            }
-
-            #endregion
-
-            #region IEnumerator Members
-
-            /// <summary>
-            /// <see cref="IEnumerator.Current"/>
-            /// </summary>
             object IEnumerator.Current {
                 get {
-                    return current;
+                    if (index == 0 || index == set.m_lastIndex + 1)
+                        throw new InvalidOperationException("cannot happen");
+                    return (object)Current;
                 }
             }
 
-            /// <summary>
-            /// <see cref="IEnumerator.MoveNext"/>
-            /// </summary>
-            public bool MoveNext() {
-                if (index >= 0) {
-                    int count = dictionary.count;
-                    Entry[] entries = dictionary.entries;
-                    while (index < count) {
-                        if ((entries[index].next & Entry.InUseFlag) != 0) {
-                            current = dictionary.entries[index].key;
-                            index++;
-                            return true;
-                        }
-                        index++;
-                    }
-                    index = -1;
-                    current = default(int);
-                }
-                return false;
-            }
-
-            /// <summary>
-            /// <see cref="IEnumerator.Reset"/>
-            /// </summary>
-            public void Reset() {
+            internal Enumerator(HashSetInt set) {
+                this.set = set;
                 index = 0;
                 current = default(int);
             }
 
-            #endregion
+            /// <summary>Releases all resources used by a <see cref="T:System.Collections.Generic.HashSet`1.Enumerator" /> object.</summary>
+            public void Dispose() {
+            }
 
+            /// <summary>Advances the enumerator to the next element of the <see cref="T:System.Collections.Generic.HashSet`1" /> collection.</summary>
+            /// <returns>true if the enumerator was successfully advanced to the next element; false if the enumerator has passed the end of the collection.</returns>
+            /// <exception cref="T:System.InvalidOperationException">The collection was modified after the enumerator was created. </exception>
+            public bool MoveNext() {
+                for (; index < set.m_lastIndex; index = index + 1) {
+                    if (set.m_slots[index].value >= 0) {
+                        current = set.m_slots[index].value;
+                        index = index + 1;
+                        return true;
+                    }
+                }
+                index = set.m_lastIndex + 1;
+                current = default(int);
+                return false;
+            }
+
+            void IEnumerator.Reset() {
+                index = 0;
+                current = default(int);
+            }
         }
-        
-        [DebuggerDisplay("Count = {dictionary.Count}")]
-        private struct ValueCollection : ICollection<int>, ICollection {
-            private HashSetInt dictionary;
-
-            internal ValueCollection(HashSetInt dictionary) {
-                this.dictionary = dictionary;
-            }
-
-            #region ICollection<int> Members
-
-            /// <summary>
-            /// <see cref="ICollection{int}.Add"/>
-            /// </summary>
-            public void Add(int item) {
-                throw new NotSupportedException("Add");
-            }
-
-            /// <summary>
-            /// <see cref="ICollection{int}.Clear"/>
-            /// </summary>
-            public void Clear() {
-                throw new NotSupportedException("Clear");
-            }
-
-            /// <summary>
-            /// <see cref="ICollection{int}.Contains"/>
-            /// </summary>
-            public bool Contains(int item) {
-                return dictionary.Contains(item);
-            }
-
-            /// <summary>
-            /// <see cref="ICollection{int}.CopyTo"/>
-            /// </summary>
-            public void CopyTo(int[] array, int index) {
-                dictionary.CopyTo(array, index);
-            }
-
-            /// <summary>
-            /// <see cref="ICollection{int}.Count"/>
-            /// </summary>
-            public int Count {
-                get {
-                    return dictionary.Count;
-                }
-            }
-
-            /// <summary>
-            /// <see cref="ICollection{int}.IsReadOnly"/>
-            /// </summary>
-            public bool IsReadOnly {
-                get {
-                    return true;
-                }
-            }
-
-            /// <summary>
-            /// <see cref="ICollection{int}.Remove"/>
-            /// </summary>
-            public bool Remove(int item) {
-                throw new NotSupportedException("Clear");
-            }
-
-            #endregion
-
-            #region IEnumerable<int> Members
-
-            /// <summary>
-            /// <see cref="IEnumerable{int}.GetEnumerator"/>
-            /// </summary>
-            public IEnumerator<int> GetEnumerator() {
-                return new Enumerator(dictionary);
-            }
-
-            #endregion
-
-            #region IEnumerable Members
-
-            IEnumerator IEnumerable.GetEnumerator() {
-                return new Enumerator(dictionary);
-            }
-
-            #endregion
-
-            #region ICollection Members
-
-            void ICollection.CopyTo(Array array, int index) {
-
-                int[] valueArray = array as int[];
-                if (valueArray != null) {
-                    dictionary.CopyTo(valueArray, index);
-                } else {
-                    object[] objectArray = array as object[];
-                    if (objectArray != null) {
-                        dictionary.CopyTo(objectArray, index);
-                    } else {
-                        throw new ArgumentException("Invalid Array Type " + array.GetType());
-                    }
-                }
-            }
-
-            int ICollection.Count {
-                get {
-                    return dictionary.Count;
-                }
-            }
-
-            bool ICollection.IsSynchronized {
-                get {
-                    return false;
-                }
-            }
-
-            object ICollection.SyncRoot {
-                get {
-                    return dictionary.SyncRoot;
-                }
-            }
-
-            #endregion
-
-            #region enumerator
-            private struct Enumerator : IEnumerator<int>, IEnumerator {
-                HashSetInt dictionary;
-                private int index;
-                private int current;
-
-
-                internal Enumerator(HashSetInt dictionary) {
-                    this.dictionary = dictionary;
-                    index = 0;
-                    current = default(int);
-                }
-
-                #region IEnumerator<int> Members
-
-                /// <summary>
-                /// <see cref="IEnumerator{int}.Current"/>
-                /// </summary>
-                public int Current {
-                    get {
-                        return current;
-                    }
-                }
-
-                #endregion
-
-                #region IDisposable Members
-
-                /// <summary>
-                /// <see cref="IDisposable.Dispose"/>
-                /// </summary>
-                public void Dispose() {
-                    index = -1;
-                    dictionary = null;
-                    current = default(int);
-                }
-
-                #endregion
-
-                #region IEnumerator Members
-
-                /// <summary>
-                /// <see cref="IEnumerator.Current"/>
-                /// </summary>
-                object IEnumerator.Current {
-                    get {
-                        if (index <= 0) {
-                            throw new InvalidOperationException(
-                                "Enumeration not started or at end"
-                            );
-                        }
-                        return current;
-                    }
-                }
-
-                /// <summary>
-                /// <see cref="IEnumerator.MoveNext"/>
-                /// </summary>
-                public bool MoveNext() {
-                    if (index >= 0) {
-                        int count = dictionary.count;
-                        Entry[] entries = dictionary.entries;
-                        while (index < count) {
-
-                            if ((entries[index].next & Entry.InUseFlag) != 0) {
-                                current = entries[index].key;
-                                index++;
-                                return true;
-                            }
-                            index++;
-                        }
-                        index = -1;
-                        current = default(int);
-                    }
-                    return false;
-                }
-
-                /// <summary>
-                /// <see cref="IEnumerator.Reset"/>
-                /// </summary>
-                public void Reset() {
-                    index = 0;
-                    current = default(int);
-                }
-
-                #endregion
-            }
-            #endregion
-        }
-        #endregion
     }
 }

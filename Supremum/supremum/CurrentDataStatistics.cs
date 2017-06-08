@@ -36,17 +36,15 @@ namespace supremum {
 
 
         internal static void ReportBest(Solution solution) {
-            var allBests = ExistingDataStatistics.allSolutionsCounts;
-            lock (allBests) {
+            lock (ExistingDataStatistics.Lock) {
                 if (1 <= solution.CountAms) {
-                    if (!allBests.Contains(solution.CountAms) && solution.CountAms < 10000) {
+                    if (ExistingDataStatistics.TryAddSolutionCounts(solution)) { 
                         solution.Save();
-                        allBests.Add(solution.CountAms);
                     }
                     if ((solution.CountAms < bestSolution) || (bestSolution == 0)) {
                         Interlocked.Increment(ref improvements);
                         Interlocked.Exchange(ref bestSolution, solution.CountAms);
-                        Console.WriteLine("New best: " + solution.CountAms.ToString("#,##0"));
+                        Console.WriteLine("New best: " + solution);
                     }
                 }
             }
