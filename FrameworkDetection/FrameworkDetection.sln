@@ -1,0 +1,60 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.27130.2036
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FrameworkDetection", "FrameworkDetection\FrameworkDetection.csproj", "{369FE947-5066-44B1-BDE7-121D6F21FCFC}"
+	ProjectSection(ProjectDependencies) = postProject
+		{55557AE7-28F3-4021-9DE2-55269DF0FE3F} = {55557AE7-28F3-4021-9DE2-55269DF0FE3F}
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DetectDotNetFramework", "DetectDotNetFramework\DetectDotNetFramework.csproj", "{19662116-9A6E-42A3-A22E-F6F82148E0A0}"
+	ProjectSection(ProjectDependencies) = postProject
+		{369FE947-5066-44B1-BDE7-121D6F21FCFC} = {369FE947-5066-44B1-BDE7-121D6F21FCFC}
+		{55557AE7-28F3-4021-9DE2-55269DF0FE3F} = {55557AE7-28F3-4021-9DE2-55269DF0FE3F}
+	EndProjectSection
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DetectDotNetCore", "DetectDotNetCore\DetectDotNetCore.csproj", "{FB49A64F-EBAC-4F04-8045-44ACAB8F7A01}"
+	ProjectSection(ProjectDependencies) = postProject
+		{369FE947-5066-44B1-BDE7-121D6F21FCFC} = {369FE947-5066-44B1-BDE7-121D6F21FCFC}
+		{55557AE7-28F3-4021-9DE2-55269DF0FE3F} = {55557AE7-28F3-4021-9DE2-55269DF0FE3F}
+	EndProjectSection
+EndProject
+Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "SharedProject1", "SharedProject1\SharedProject1.shproj", "{A168B43D-860B-4174-B823-8C4528B71F2B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MultiTargetClassLibrary", "MultiTargetClassLibrary\MultiTargetClassLibrary.csproj", "{55557AE7-28F3-4021-9DE2-55269DF0FE3F}"
+EndProject
+Global
+	GlobalSection(SharedMSBuildProjectFiles) = preSolution
+		SharedProject1\SharedProject1.projitems*{19662116-9a6e-42a3-a22e-f6f82148e0a0}*SharedItemsImports = 4
+		SharedProject1\SharedProject1.projitems*{a168b43d-860b-4174-b823-8c4528b71f2b}*SharedItemsImports = 13
+	EndGlobalSection
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{369FE947-5066-44B1-BDE7-121D6F21FCFC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{369FE947-5066-44B1-BDE7-121D6F21FCFC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{369FE947-5066-44B1-BDE7-121D6F21FCFC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{369FE947-5066-44B1-BDE7-121D6F21FCFC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{19662116-9A6E-42A3-A22E-F6F82148E0A0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{19662116-9A6E-42A3-A22E-F6F82148E0A0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{19662116-9A6E-42A3-A22E-F6F82148E0A0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{19662116-9A6E-42A3-A22E-F6F82148E0A0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FB49A64F-EBAC-4F04-8045-44ACAB8F7A01}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FB49A64F-EBAC-4F04-8045-44ACAB8F7A01}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FB49A64F-EBAC-4F04-8045-44ACAB8F7A01}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FB49A64F-EBAC-4F04-8045-44ACAB8F7A01}.Release|Any CPU.Build.0 = Release|Any CPU
+		{55557AE7-28F3-4021-9DE2-55269DF0FE3F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{55557AE7-28F3-4021-9DE2-55269DF0FE3F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{55557AE7-28F3-4021-9DE2-55269DF0FE3F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{55557AE7-28F3-4021-9DE2-55269DF0FE3F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {B3A59C31-0169-45E6-AC7A-A65137045086}
+	EndGlobalSection
+EndGlobal

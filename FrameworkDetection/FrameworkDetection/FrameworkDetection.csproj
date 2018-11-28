@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <ApplicationIcon />
+    <OutputType>Library</OutputType>
+    <StartupObject />
+  </PropertyGroup>
+
+  <Import Project="..\SharedProject1\SharedProject1.projitems" Label="Shared" />
+
+  <ItemGroup>
+    <ProjectReference Include="..\MultiTargetClassLibrary\MultiTargetClassLibrary.csproj" />
+  </ItemGroup>
+
+</Project>
