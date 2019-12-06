@@ -31,6 +31,7 @@
             this.log = new System.Windows.Forms.TextBox();
             this.abort = new System.Windows.Forms.Button();
             this.fake = new System.Windows.Forms.Button();
+            this.verbose = new System.Windows.Forms.CheckBox();
             this.SuspendLayout();
             // 
             // lSource
@@ -60,7 +61,7 @@
             this.source.FormattingEnabled = true;
             this.source.Location = new System.Drawing.Point(44, 6);
             this.source.Name = "source";
-            this.source.Size = new System.Drawing.Size(671, 21);
+            this.source.Size = new System.Drawing.Size(674, 21);
             this.source.TabIndex = 2;
             // 
             // target
@@ -72,13 +73,13 @@
             this.target.FormattingEnabled = true;
             this.target.Location = new System.Drawing.Point(44, 35);
             this.target.Name = "target";
-            this.target.Size = new System.Drawing.Size(671, 21);
+            this.target.Size = new System.Drawing.Size(674, 21);
             this.target.TabIndex = 3;
             // 
             // execute
             // 
             this.execute.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.execute.Location = new System.Drawing.Point(719, 5);
+            this.execute.Location = new System.Drawing.Point(722, 5);
             this.execute.Name = "execute";
             this.execute.Size = new System.Drawing.Size(54, 23);
             this.execute.TabIndex = 4;
@@ -92,17 +93,18 @@
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.log.Font = new System.Drawing.Font("Lucida Console", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.log.Location = new System.Drawing.Point(3, 69);
+            this.log.HideSelection = false;
+            this.log.Location = new System.Drawing.Point(5, 90);
             this.log.Multiline = true;
             this.log.Name = "log";
             this.log.ScrollBars = System.Windows.Forms.ScrollBars.Both;
-            this.log.Size = new System.Drawing.Size(798, 379);
+            this.log.Size = new System.Drawing.Size(801, 452);
             this.log.TabIndex = 5;
             // 
             // abort
             // 
             this.abort.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.abort.Location = new System.Drawing.Point(719, 33);
+            this.abort.Location = new System.Drawing.Point(722, 61);
             this.abort.Name = "abort";
             this.abort.Size = new System.Drawing.Size(54, 23);
             this.abort.TabIndex = 6;
@@ -113,19 +115,34 @@
             // fake
             // 
             this.fake.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.fake.Location = new System.Drawing.Point(779, 3);
+            this.fake.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.fake.Location = new System.Drawing.Point(722, 33);
             this.fake.Name = "fake";
-            this.fake.Size = new System.Drawing.Size(22, 60);
+            this.fake.Size = new System.Drawing.Size(54, 23);
             this.fake.TabIndex = 7;
             this.fake.Text = "&Fake";
             this.fake.UseVisualStyleBackColor = true;
             this.fake.Click += new System.EventHandler(this.Fake);
             // 
+            // verbose
+            // 
+            this.verbose.AutoSize = true;
+            this.verbose.CheckAlign = System.Drawing.ContentAlignment.MiddleRight;
+            this.verbose.Checked = true;
+            this.verbose.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.verbose.Location = new System.Drawing.Point(5, 65);
+            this.verbose.Name = "verbose";
+            this.verbose.Size = new System.Drawing.Size(65, 17);
+            this.verbose.TabIndex = 8;
+            this.verbose.Text = "&Verbose";
+            this.verbose.UseVisualStyleBackColor = true;
+            // 
             // PhotoMover
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(804, 450);
+            this.ClientSize = new System.Drawing.Size(807, 564);
+            this.Controls.Add(this.verbose);
             this.Controls.Add(this.fake);
             this.Controls.Add(this.abort);
             this.Controls.Add(this.log);
@@ -151,6 +168,7 @@
         private System.Windows.Forms.TextBox log;
         private System.Windows.Forms.Button abort;
         private System.Windows.Forms.Button fake;
+        private System.Windows.Forms.CheckBox verbose;
     }
 }
 

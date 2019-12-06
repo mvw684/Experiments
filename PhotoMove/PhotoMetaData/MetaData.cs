@@ -1,27 +1,51 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Tracing;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+
 using MetadataExtractor;
 using MetadataExtractor.Formats.Adobe;
 using MetadataExtractor.Formats.Avi;
 using MetadataExtractor.Formats.Bmp;
 using MetadataExtractor.Formats.Exif;
+using MetadataExtractor.Formats.Exif.Makernotes;
+using MetadataExtractor.Formats.FileSystem;
 using MetadataExtractor.Formats.FileType;
+using MetadataExtractor.Formats.Icc;
+using MetadataExtractor.Formats.Iptc;
 using MetadataExtractor.Formats.Jfif;
 using MetadataExtractor.Formats.Jpeg;
+using MetadataExtractor.Formats.Photoshop;
+using MetadataExtractor.Formats.Png;
+using MetadataExtractor.Formats.QuickTime;
+using MetadataExtractor.Formats.Xmp;
 
 namespace PhotoMetaData {
     public class MetaData {
+        private DateTime? creationDate;
         private FileInfo file;
         private int indentLevel;
         private string indentString = string.Empty;
         Action<EventLevel, string> logger;
-        public DateTime? CreationDate { get; private set; }
+        public DateTime? CreationDate {
+            get {
+                return creationDate;
+            }
+
+        }
+        private void SetCreationDate(DateTime value) {
+            if (!value.IsValid()) {
+                return;
+            }
+            var localValue = value.ToLocalTime();
+            if (!creationDate.HasValue) {
+                creationDate = value;
+            } else {
+                if (creationDate > value) {
+                    creationDate = value;
+                }
+            }
+        }
 
         public MetaData(FileInfo file, Action<EventLevel, string> logger) {
             this.file = file;
@@ -41,15 +65,15 @@ namespace PhotoMetaData {
 
         public void Parse() { 
             var exifData = ImageMetadataReader.ReadMetadata(file.FullName);
-            LogInfo(file.FullName);
+            logger(EventLevel.Informational,  file.FullName);
             Indent++;
             foreach(var exifDirectory in exifData) {
-                ReadDirectory(exifDirectory);
+                ReadGenericDirectory(exifDirectory);
             }
             Indent--;
         }
 
-        private void ReadDirectory(MetadataExtractor.Directory exifDirectory) {
+        private void ReadGenericDirectory(MetadataExtractor.Directory exifDirectory) {
             switch(exifDirectory) {
                 case AdobeJpegDirectory adobeJpegDirectory:
                     ReadDirectoryDetails(adobeJpegDirectory);
@@ -66,16 +90,64 @@ namespace PhotoMetaData {
                 case FileTypeDirectory fileTypeDirectory:
                     ReadDirectoryDetails(fileTypeDirectory);
                     break;
+                case ExifIfd0Directory exifIfd0Directory:
+                    ReadDirectoryDetails(exifIfd0Directory);
+                    break;
+                case ExifInteropDirectory exifInteropDirectory:
+                    ReadDirectoryDetails(exifInteropDirectory);
+                    break;
+                case ExifSubIfdDirectory exifSubIfdDirectory:
+                    ReadDirectoryDetails(exifSubIfdDirectory);
+                    break;
+                case ExifThumbnailDirectory exifThumbnailDirectory:
+                    ReadDirectoryDetails(exifThumbnailDirectory);
+                    break;
+                case GpsDirectory gpsDirectory:
+                    ReadDirectoryDetails(gpsDirectory);
+                    break;
+                case FileMetadataDirectory fileMetadataDirectory:
+                    ReadDirectoryDetails(fileMetadataDirectory);
+                    break;
+                case CanonMakernoteDirectory canonMakernoteDirectory:
+                    ReadDirectoryDetails(canonMakernoteDirectory);
+                    break;
+                case PngDirectory pngDirectory:
+                    ReadDirectoryDetails(pngDirectory);
+                    break;
+                case PhotoshopDirectory photoshopDirectory:
+                    ReadDirectoryDetails(photoshopDirectory);
+                    break;
+                case IptcDirectory iptcDirectory:
+                    ReadDirectoryDetails(iptcDirectory);
+                    break;
+                case QuickTimeFileTypeDirectory quickTimeFileTypeDirectory:
+                    ReadDirectoryDetails(quickTimeFileTypeDirectory);
+                    break;
+                case QuickTimeMovieHeaderDirectory quickTimeMovieHeaderDirectory:
+                    ReadDirectoryDetails(quickTimeMovieHeaderDirectory);
+                    break;
+                case QuickTimeTrackHeaderDirectory quickTimeTrackHeaderDirectory:
+                    ReadDirectoryDetails(quickTimeTrackHeaderDirectory);
+                    break;
+                case XmpDirectory xmpDirectory:
+                    ReadDirectoryDetails(xmpDirectory);
+                    break;
+                case JpegCommentDirectory jpegCommentDirectory:
+                    ReadDirectoryDetails(jpegCommentDirectory);
+                    break;
+                case IccDirectory iccDirectory:
+                    ReadDirectoryDetails(iccDirectory);
+                    break;
                 default:
                     if (Debugger.IsAttached) {
                         Debugger.Break();
                     } else {
                         Debugger.Launch();
                     }
-                    LogInfo("UNKNOWN DIR " + exifDirectory.GetType().FullName);
-                    Indent++;
-                    DumpDirectory(exifDirectory);
-                    Indent--;
+                    logger(EventLevel.Warning, "UNKNOWN DIR " + exifDirectory.GetType().FullName);
+                    //Indent++;
+                    //DumpDirectory(exifDirectory);
+                    //Indent--;
                     break;
             }
         }
@@ -93,6 +165,16 @@ namespace PhotoMetaData {
         }
 
         private void ReadDirectoryDetails(ExifIfd0Directory directory) {
+            if (directory.TryGetDateTime(ExifIfd0Directory.TagDateTime, out var dateTime)) {
+                SetCreationDate(dateTime);
+            }
+            if (directory.TryGetDateTime(ExifIfd0Directory.TagDateTimeDigitized, out dateTime)) {
+                SetCreationDate(dateTime);
+            }
+            var camera = directory.GetString(ExifIfd0Directory.TagMake);
+            if (!string.IsNullOrEmpty(camera)) {
+                logger(EventLevel.LogAlways, "camera: " + camera);
+            }
             DumpDirectory(directory);
         }
 
@@ -105,10 +187,6 @@ namespace PhotoMetaData {
         }
 
         private void ReadDirectoryDetails(ExifThumbnailDirectory directory) {
-            DumpDirectory(directory);
-        }
-
-        private void ReadDirectoryDetails(GpsDirectory directory) {
             DumpDirectory(directory);
         }
 
@@ -128,17 +206,72 @@ namespace PhotoMetaData {
             DumpDirectory(directory);
         }
 
-        private void DumpDirectory<T>(T directory) where T: MetadataExtractor.Directory {
-            LogInfo(directory.Name);
-            Indent++;
-            foreach (var tag in directory.Tags) {
-                LogInfo(tag.Name + "=" + tag.Description);
-            }
-            Indent--;
+        private void ReadDirectoryDetails(ExifInteropDirectory directory) {
+            DumpDirectory(directory);
         }
 
-        private void LogInfo(string message) {
-            logger(EventLevel.Informational, indentString + message);
+        private void ReadDirectoryDetails(GpsDirectory directory) {
+            DumpDirectory(directory);
+        }
+
+        private void ReadDirectoryDetails(FileMetadataDirectory directory) {
+            if (directory.TryGetDateTime(FileMetadataDirectory.TagFileModifiedDate, out var dateTime)) {
+                SetCreationDate(dateTime);
+            }
+            DumpDirectory(directory);
+        }
+
+        private void ReadDirectoryDetails(CanonMakernoteDirectory directory) {
+            DumpDirectory(directory);
+        }
+
+        private void ReadDirectoryDetails(PngDirectory directory) {
+            DumpDirectory(directory);
+        }
+
+        private void ReadDirectoryDetails(PhotoshopDirectory directory) {
+            DumpDirectory(directory, EventLevel.Informational);
+        }
+
+        private void ReadDirectoryDetails(IptcDirectory directory) {
+            DumpDirectory(directory, EventLevel.Informational);
+        }
+
+        private void ReadDirectoryDetails(QuickTimeFileTypeDirectory directory) {
+            DumpDirectory(directory);
+        }
+
+        private void ReadDirectoryDetails(QuickTimeMovieHeaderDirectory directory) {
+            DumpDirectory(directory);
+        }
+
+        private void ReadDirectoryDetails(QuickTimeTrackHeaderDirectory directory) {
+            DumpDirectory(directory);
+        }
+
+        private void ReadDirectoryDetails(XmpDirectory directory) {
+            DumpDirectory(directory);
+        }
+
+        private void ReadDirectoryDetails(JpegCommentDirectory directory) {
+            DumpDirectory(directory);
+        }
+
+        private void ReadDirectoryDetails(IccDirectory directory) {
+            DumpDirectory(directory);
+        }
+
+
+        private void DumpDirectory<T>(
+            T directory, 
+            EventLevel eventLevel = EventLevel.Verbose
+        ) where T: MetadataExtractor.Directory {
+            logger(EventLevel.Verbose, directory.Name + " - " + typeof(T).FullName);
+            Indent++;
+            foreach (var tag in directory.Tags) {
+                logger(eventLevel, directory.Name + "." + tag.Name + "=" + tag.Description);
+            }
+            Indent--;
         }
     }
 }

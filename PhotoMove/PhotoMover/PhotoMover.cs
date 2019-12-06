@@ -1,16 +1,8 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.ComponentModel;
-using System.Data;
 using System.Diagnostics;
 using System.Diagnostics.Tracing;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Xml.Schema;
 using Configuration;
 
 namespace PhotoMover {
@@ -23,7 +15,7 @@ namespace PhotoMover {
         private Action<DateTime, EventLevel, string> logDelegate;
         private EventHandler<EventArgs> completed;
         private BackgroundMover mover;
-
+        
         private static string[] GetLogLevelPrefixes() {
             var result = new string[6];
             result[(int)EventLevel.LogAlways] = "Always   : ";
@@ -42,6 +34,7 @@ namespace PhotoMover {
             InitializeComponent();
             source.DataBindings.Add(new Binding(nameof(ComboBox.Text), configuration, nameof(PhotoMoverConfiguration.SourceLocation)));
             target.DataBindings.Add(new Binding(nameof(ComboBox.Text), configuration, nameof(PhotoMoverConfiguration.TargetLocation)));
+            verbose.DataBindings.Add(new Binding(nameof(CheckBox.Checked), configuration, nameof(PhotoMoverConfiguration.Verbose)));
             logDelegate = LogInternal;
             mover = new BackgroundMover(Log);
             abort.Enabled = false;
@@ -97,7 +90,9 @@ namespace PhotoMover {
         }
 
         private void LogInternal(DateTime timestamp, EventLevel level, string message) {
-
+            if (level == EventLevel.Verbose && !configuration.Verbose) {
+                return;
+            }
             log.AppendText(timestamp.ToString("HH:mm:ss.ffffff") + " " + logLevelPrefix[(int)level] + message + Environment.NewLine);
         }
     }

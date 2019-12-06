@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.Tracing;
 using System.IO;
 using System.Linq;
@@ -50,7 +51,9 @@ namespace PhotoMover {
                 }
                 var sourceFiles = source.GetFiles();
                 logger(EventLevel.Informational, "Found " + sourceFiles.Length + " files");
-                for(int i = 0; !Aborted && i < sourceFiles.Length && i <= 5; i++) {
+                Array.Sort(sourceFiles, (a, b) => a.OldestDate().CompareTo(b.OldestDate()));
+                int limit = Debugger.IsAttached ? 3 : int.MaxValue;
+                for(int i = 0; !Aborted && i < sourceFiles.Length && i <= limit; i++) {
                     var sourceFile = sourceFiles[i];
                     MoveFile(sourceFile, target, doExecute);
                 }
@@ -69,16 +72,17 @@ namespace PhotoMover {
             var metaData = new MetaData(sourceFile, logger);
             metaData.Parse();
             if (metaData.CreationDate.HasValue) {
-                string folder = metaData.CreationDate.Value.ToString("yyyy\\yyyy_MM\\yyyy_MM_dd");
-                string targetName = Path.Combine(target.FullName, folder, sourceFile.Name);
+                string folder = metaData.CreationDate.Value.ToString("yyyy\\\\yyyy_MM\\\\yyyy_MM_dd");
+                string targetFolder = Path.Combine(target.FullName, folder);
+                string targetName = Path.Combine(targetFolder, sourceFile.Name);
                 try {
-                    if (doExecute && !Directory.Exists(folder)) {
-                        Directory.CreateDirectory(folder);
-                        logger(EventLevel.Informational, "Created:  " + folder);
+                    if (doExecute && !Directory.Exists(targetFolder)) {
+                        Directory.CreateDirectory(targetFolder);
+                        logger(EventLevel.Informational, "Created:  " + targetFolder);
                     }
                     if (!File.Exists(targetName)) {
                         if (doExecute) {
-                            //File.Move(sourceFile.FullName, targetName);
+                            File.Move(sourceFile.FullName, targetName);
                         }
                         logger(EventLevel.Informational, (doExecute ? "moving: " : "Fake: ") + sourceFile.Name + " -> " + targetName);
                     } else {
@@ -88,6 +92,8 @@ namespace PhotoMover {
                     logger(EventLevel.Error, "Exception: " + sourceFile.Name + " -> " + targetName);
                     logger(EventLevel.Error, "Exception: " + e.Message);
                 }
+            } else {
+                logger(EventLevel.Warning, "Could not move, no date information, " + sourceFile.FullName);
             }
         }
     }

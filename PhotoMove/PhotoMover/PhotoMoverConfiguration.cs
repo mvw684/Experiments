@@ -12,6 +12,7 @@ namespace PhotoMover {
 
         private string sourceLocation;
         private string targetLocation;
+        private bool verbose;
 
         public event PropertyChangedEventHandler PropertyChanged;
 
@@ -31,6 +32,16 @@ namespace PhotoMover {
             }
             set {
                 targetLocation = value;
+                NotifyPropertyChanged();
+            }
+        }
+
+        public bool Verbose {
+            get {
+                return verbose;
+            }
+            set {
+                verbose = value;
                 NotifyPropertyChanged();
             }
         }
