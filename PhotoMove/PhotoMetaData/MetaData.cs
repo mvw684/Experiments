@@ -39,10 +39,10 @@ namespace PhotoMetaData {
             }
             var localValue = value.ToLocalTime();
             if (!creationDate.HasValue) {
-                creationDate = value;
+                creationDate = localValue;
             } else {
-                if (creationDate > value) {
-                    creationDate = value;
+                if (creationDate > localValue) {
+                    creationDate = localValue;
                 }
             }
         }
@@ -63,14 +63,23 @@ namespace PhotoMetaData {
             }
         }
 
-        public void Parse() { 
-            var exifData = ImageMetadataReader.ReadMetadata(file.FullName);
-            logger(EventLevel.Informational,  file.FullName);
-            Indent++;
-            foreach(var exifDirectory in exifData) {
-                ReadGenericDirectory(exifDirectory);
+        public bool Parse() {
+            try {
+                if (file.Name.Equals("Desktop.ini", StringComparison.OrdinalIgnoreCase)) {
+                    return false;
+                }
+                var exifData = ImageMetadataReader.ReadMetadata(file.FullName);
+                logger(EventLevel.Informational, file.FullName);
+                Indent++;
+                foreach (var exifDirectory in exifData) {
+                    ReadGenericDirectory(exifDirectory);
+                }
+                Indent--;
+                return true;
+            } catch (Exception e) {
+                logger(EventLevel.Warning, e.GetType().Name + " " + e.Message + " " + file.FullName);
+                return false;
             }
-            Indent--;
         }
 
         private void ReadGenericDirectory(MetadataExtractor.Directory exifDirectory) {

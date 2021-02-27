@@ -42,6 +42,7 @@ namespace PhotoMover {
             try {
                 DirectoryInfo source = new DirectoryInfo(SourceLocation);
                 DirectoryInfo target = new DirectoryInfo(TargetLocation);
+
                 if (!source.Exists) {
                     logger(EventLevel.Warning, source.FullName + " does not exist");
                     return;
@@ -49,7 +50,7 @@ namespace PhotoMover {
                 if (!target.Exists) {
                     target.Create();
                 }
-                var sourceFiles = source.GetFiles();
+                var sourceFiles = source.GetFiles("*", SearchOption.AllDirectories);
                 logger(EventLevel.Informational, "Found " + sourceFiles.Length + " files");
                 Array.Sort(sourceFiles, (a, b) => a.OldestDate().CompareTo(b.OldestDate()));
                 int limit = Debugger.IsAttached ? 3 : int.MaxValue;
@@ -70,30 +71,34 @@ namespace PhotoMover {
 
         private void MoveFile(FileInfo sourceFile, DirectoryInfo target, bool doExecute) {
             var metaData = new MetaData(sourceFile, logger);
-            metaData.Parse();
-            if (metaData.CreationDate.HasValue) {
-                string folder = metaData.CreationDate.Value.ToString("yyyy\\\\yyyy_MM\\\\yyyy_MM_dd");
-                string targetFolder = Path.Combine(target.FullName, folder);
-                string targetName = Path.Combine(targetFolder, sourceFile.Name);
-                try {
-                    if (doExecute && !Directory.Exists(targetFolder)) {
-                        Directory.CreateDirectory(targetFolder);
-                        logger(EventLevel.Informational, "Created:  " + targetFolder);
-                    }
-                    if (!File.Exists(targetName)) {
-                        if (doExecute) {
-                            File.Move(sourceFile.FullName, targetName);
+            if (metaData.Parse()) {
+                if (metaData.CreationDate.HasValue) {
+                    string folder = metaData.CreationDate.Value.ToString("yyyy\\\\yyyy_MM\\\\yyyy_MM_dd");
+                    string targetFolder = Path.Combine(target.FullName, folder);
+                    string targetName = Path.Combine(targetFolder, sourceFile.Name);
+                    try {
+                        if (doExecute && !Directory.Exists(targetFolder)) {
+                            Directory.CreateDirectory(targetFolder);
+                            logger(EventLevel.Informational, "Created:  " + targetFolder);
                         }
-                        logger(EventLevel.Informational, (doExecute ? "moving: " : "Fake: ") + sourceFile.Name + " -> " + targetName);
-                    } else {
-                        logger(EventLevel.Warning, "Already exists: " + sourceFile.Name + " -> " + targetName);
+                        if (!File.Exists(targetName)) {
+                            if (doExecute) {
+                                File.Move(sourceFile.FullName, targetName);
+                            }
+                            logger(EventLevel.Informational, (doExecute ? "moving: " : "Fake: ") + sourceFile.Name + " -> " + targetName);
+                        } else {
+                            logger(EventLevel.Warning, "Already exists: " + sourceFile.Name + " -> " + targetName);
+                            MoveFile(sourceFile, target.CreateSubdirectory("Duplicates"), doExecute);
+                        }
+                    } catch (Exception e) {
+                        logger(EventLevel.Error, "Exception: " + sourceFile.Name + " -> " + targetName);
+                        logger(EventLevel.Error, "Exception: " + e.Message);
                     }
-                } catch(Exception e) {
-                    logger(EventLevel.Error, "Exception: " + sourceFile.Name + " -> " + targetName);
-                    logger(EventLevel.Error, "Exception: " + e.Message);
+                } else {
+                    logger(EventLevel.Warning, "Could not move, no date information, " + sourceFile.FullName);
                 }
             } else {
-                logger(EventLevel.Warning, "Could not move, no date information, " + sourceFile.FullName);
+                logger(EventLevel.Warning, "Could not move, parse failed, " + sourceFile.FullName);
             }
         }
     }
