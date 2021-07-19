@@ -8,15 +8,16 @@ SETLOCAL ENABLEEXTENSIONS
 
 @call reset
 
-@call a 
+@cmd.exe /C a.cmd
 @if ERRORLEVEL 1 call :ERROR "a failed"
-@call b
+@cmd.exe /C b
 @if ERRORLEVEL 1 call :ERROR "b failed"
-@call c
+@cmd.exe /C c
 @if ERRORLEVEL 1 call :ERROR "c failed"
-@goto :SUCCESS
 
 @call report
+
+@goto :SUCCESS
 
 :ERROR
 set EXIT_CODE=1

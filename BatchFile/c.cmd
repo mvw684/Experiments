@@ -4,6 +4,7 @@
 @set EXIT_CODE=0
 
 @call log c c c 
+@setx script_c c
 
 @goto :SUCCESS
 :ERROR
