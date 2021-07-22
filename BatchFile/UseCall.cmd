@@ -20,11 +20,11 @@ SETLOCAL ENABLEEXTENSIONS
 
 :ERROR
 set EXIT_CODE=1
-call log %name%: exited with error %1
+@call log %~n0: exited with error %1
 echo %name%: %EXIT_CODE%
 
 :SUCCESS
 @popd
 
-@echo %DATE% %TIME% %name%
+@echo %DATE% %TIME% %~n0
 @exit /b %EXIT_CODE%

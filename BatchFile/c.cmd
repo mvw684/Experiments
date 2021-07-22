@@ -9,7 +9,7 @@
 @goto :SUCCESS
 :ERROR
 @set EXIT_CODE=1
-@call log %name%: exited with error %1
+@call log %~n0: exited with error %1
 
 :SUCCESS
 @popd
