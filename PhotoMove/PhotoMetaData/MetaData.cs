@@ -11,6 +11,7 @@ using MetadataExtractor.Formats.Exif;
 using MetadataExtractor.Formats.Exif.Makernotes;
 using MetadataExtractor.Formats.FileSystem;
 using MetadataExtractor.Formats.FileType;
+using MetadataExtractor.Formats.Gif;
 using MetadataExtractor.Formats.Icc;
 using MetadataExtractor.Formats.Iptc;
 using MetadataExtractor.Formats.Jfif;
@@ -90,8 +91,20 @@ namespace PhotoMetaData {
                 case JpegDirectory jpegDirectory:
                     ReadDirectoryDetails(jpegDirectory);
                     break;
+                case GifHeaderDirectory gifHeaderDirectory:
+                    ReadDirectoryDetails(gifHeaderDirectory);
+                    break;
+                case GifControlDirectory gifControlDirectory:
+                    ReadDirectoryDetails(gifControlDirectory);
+                    break;
+                case GifImageDirectory gifImageDirectory:
+                    ReadDirectoryDetails(gifImageDirectory);
+                    break;
                 case JfifDirectory jfifDirectory:
                     ReadDirectoryDetails(jfifDirectory);
+                    break;
+                case AviDirectory aviDirectory:
+                    ReadDirectoryDetails(aviDirectory); 
                     break;
                 case HuffmanTablesDirectory huffmanTablesDirectory:
                     ReadDirectoryDetails(huffmanTablesDirectory);
@@ -132,6 +145,9 @@ namespace PhotoMetaData {
                 case QuickTimeFileTypeDirectory quickTimeFileTypeDirectory:
                     ReadDirectoryDetails(quickTimeFileTypeDirectory);
                     break;
+                case QuickTimeMetadataHeaderDirectory quickTimeMetadataHeaderDirectory:
+                    ReadDirectoryDetails(quickTimeMetadataHeaderDirectory);
+                    break;
                 case QuickTimeMovieHeaderDirectory quickTimeMovieHeaderDirectory:
                     ReadDirectoryDetails(quickTimeMovieHeaderDirectory);
                     break;
@@ -147,6 +163,28 @@ namespace PhotoMetaData {
                 case IccDirectory iccDirectory:
                     ReadDirectoryDetails(iccDirectory);
                     break;
+                case SamsungType2MakernoteDirectory samsungType2MakernoteDirectory:
+                    ReadDirectoryDetails(samsungType2MakernoteDirectory);
+                    break;
+                case KodakMakernoteDirectory kodakMakernoteDirectory:
+                    ReadDirectoryDetails(kodakMakernoteDirectory);
+                    break;
+                case PanasonicMakernoteDirectory panasonicMakernoteDirectory:
+                    ReadDirectoryDetails(panasonicMakernoteDirectory);
+                    break;
+                case NikonType2MakernoteDirectory nikonType2MakernoteDirectory:
+                    ReadDirectoryDetails(nikonType2MakernoteDirectory);
+                    break;
+                case CasioType2MakernoteDirectory casioType2MakernoteDirectory:
+                    ReadDirectoryDetails(casioType2MakernoteDirectory);
+                    break;
+                case SonyType1MakernoteDirectory sonyType1MakernoteDirectory:
+                    ReadDirectoryDetails(sonyType1MakernoteDirectory);
+                    break;
+                case PrintIMDirectory printIMDirectory:
+                    ReadDirectoryDetails(printIMDirectory);
+                    break;
+
                 default:
                     if (Debugger.IsAttached) {
                         Debugger.Break();
@@ -203,6 +241,18 @@ namespace PhotoMetaData {
             DumpDirectory(directory);
         }
 
+        private void ReadDirectoryDetails(GifHeaderDirectory directory) {
+            DumpDirectory(directory);
+        }
+
+        private void ReadDirectoryDetails(GifControlDirectory directory) {
+            DumpDirectory(directory);
+        }
+
+        private void ReadDirectoryDetails(GifImageDirectory directory) {
+            DumpDirectory(directory);
+        }
+
         private void ReadDirectoryDetails(JfifDirectory directory) {
             DumpDirectory(directory);
         }
@@ -250,11 +300,43 @@ namespace PhotoMetaData {
             DumpDirectory(directory);
         }
 
+        private void ReadDirectoryDetails(QuickTimeMetadataHeaderDirectory directory) {
+            DumpDirectory(directory);
+        }
+
         private void ReadDirectoryDetails(QuickTimeMovieHeaderDirectory directory) {
             DumpDirectory(directory);
         }
 
         private void ReadDirectoryDetails(QuickTimeTrackHeaderDirectory directory) {
+            DumpDirectory(directory);
+        }
+
+        private void ReadDirectoryDetails(PanasonicMakernoteDirectory directory) {
+            DumpDirectory(directory);
+        }
+
+        private void ReadDirectoryDetails(SamsungType2MakernoteDirectory directory) {
+            DumpDirectory(directory);
+        }
+
+        private void ReadDirectoryDetails(KodakMakernoteDirectory directory) {
+            DumpDirectory(directory);
+        }
+
+        private void ReadDirectoryDetails(NikonType2MakernoteDirectory directory) {
+            DumpDirectory(directory);
+        }
+
+        private void ReadDirectoryDetails(CasioType2MakernoteDirectory directory) {
+            DumpDirectory(directory);
+        }
+
+        private void ReadDirectoryDetails(SonyType1MakernoteDirectory directory) {
+            DumpDirectory(directory);
+        }
+                
+        private void ReadDirectoryDetails(PrintIMDirectory directory) {
             DumpDirectory(directory);
         }
 
