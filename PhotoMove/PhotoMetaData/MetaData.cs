@@ -24,10 +24,10 @@ using MetadataExtractor.Formats.Xmp;
 namespace PhotoMetaData {
     public class MetaData {
         private DateTime? creationDate;
-        private FileInfo file;
+        private readonly FileInfo file;
         private int indentLevel;
         private string indentString = string.Empty;
-        Action<EventLevel, string> logger;
+        private readonly Action<EventLevel, string> logger;
         public DateTime? CreationDate {
             get {
                 return creationDate;
@@ -38,7 +38,7 @@ namespace PhotoMetaData {
             if (!value.IsValid()) {
                 return;
             }
-            var localValue = value.ToLocalTime();
+            DateTime localValue = value.ToLocalTime();
             if (!creationDate.HasValue) {
                 creationDate = localValue;
             } else {
@@ -189,7 +189,7 @@ namespace PhotoMetaData {
                     if (Debugger.IsAttached) {
                         Debugger.Break();
                     } else {
-                        Debugger.Launch();
+                        _ = Debugger.Launch();
                     }
                     logger(EventLevel.Warning, "UNKNOWN DIR " + exifDirectory.GetType().FullName);
                     //Indent++;

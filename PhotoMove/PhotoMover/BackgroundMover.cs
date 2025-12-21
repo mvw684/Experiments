@@ -1,18 +1,14 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Tracing;
 using System.IO;
-using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using PhotoMetaData;
 
 namespace PhotoMover {
     internal class BackgroundMover {
 
-        private Action<EventLevel, string> logger;
+        private readonly Action<EventLevel, string> logger;
 
             internal bool Executing { get; set; }
         internal bool Aborted { get; set; }
@@ -30,9 +26,11 @@ namespace PhotoMover {
             if (Executing) {
                 throw new InvalidOperationException("Älready executing");
             }
-            Thread thread = new Thread(Execute);
-            thread.Name = "Moving ...";
-            thread.IsBackground = true;
+            var thread = 
+                new Thread(Execute) {
+                    Name = "Moving ...",
+                    IsBackground = true
+                };
             Executing = true;
             thread.Start(doExecute);
         }
@@ -40,8 +38,8 @@ namespace PhotoMover {
         internal void Execute(object doExecuteObject) {
             bool doExecute = (bool)doExecuteObject;
             try {
-                DirectoryInfo source = new DirectoryInfo(SourceLocation);
-                DirectoryInfo target = new DirectoryInfo(TargetLocation);
+                var source = new DirectoryInfo(SourceLocation);
+                var target = new DirectoryInfo(TargetLocation);
 
                 if (!source.Exists) {
                     logger(EventLevel.Warning, source.FullName + " does not exist");
@@ -78,7 +76,7 @@ namespace PhotoMover {
                     string targetName = Path.Combine(targetFolder, sourceFile.Name);
                     try {
                         if (doExecute && !Directory.Exists(targetFolder)) {
-                            Directory.CreateDirectory(targetFolder);
+                            _ = Directory.CreateDirectory(targetFolder);
                             logger(EventLevel.Informational, "Created:  " + targetFolder);
                         }
                         if (!File.Exists(targetName)) {
